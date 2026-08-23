@@ -1,7 +1,6 @@
 import asyncio
 import re
 import secrets
-import socket
 from datetime import datetime
 
 import docker
@@ -22,7 +21,7 @@ from schema.sandbox.containers import (
     SandboxContainerPortMapping,
     SandboxContainerStatus,
 )
-from service.host.docker import inspect_image_on_host_sync
+from service.host.docker import docker_client_for_host, inspect_image_on_host_sync
 from core.sandbox.command_jobs import cancel_sandbox_async_commands
 from service.sandbox.control_proxy import apply_container_egress
 from service.sandbox.docker_ops import (
@@ -145,7 +144,7 @@ async def _create_sandbox_container(
             reserved_tcp_host_ports = {mapping.host_port for mapping in port_mappings if mapping.protocol == "tcp"}
             control_proxy_host_port = await asyncio.to_thread(
                 _allocate_control_proxy_host_port,
-                docker_host.ip_address,
+                docker_host,
                 reserved_tcp_host_ports,
             )
             control_proxy_token = secrets.token_urlsafe(32)
@@ -594,17 +593,31 @@ def _assert_host_image_exists(host: ManagedHost, image_name: str) -> None:
     inspect_image_on_host_sync(host, image_name)
 
 
-def _allocate_control_proxy_host_port(host_ip: str, reserved_tcp_ports: set[int]) -> int:
+def _published_host_ports(host: ManagedHost) -> set[int]:
+    client = docker_client_for_host(host)
+    try:
+        used: set[int] = set()
+        for container in client.containers.list(all=True):
+            bindings = (container.attrs.get("HostConfig") or {}).get("PortBindings") or {}
+            for mapped in bindings.values():
+                if not mapped:
+                    continue
+                for binding in mapped:
+                    host_port = (binding or {}).get("HostPort")
+                    if host_port:
+                        used.add(int(host_port))
+        return used
+    finally:
+        client.close()
+
+
+def _allocate_control_proxy_host_port(host: ManagedHost, reserved_tcp_ports: set[int]) -> int:
+    used_ports = _published_host_ports(host) | reserved_tcp_ports
     for _ in range(_CONTROL_PROXY_HOST_PORT_RETRIES):
         port = secrets.randbelow(
             _CONTROL_PROXY_HOST_PORT_MAX - _CONTROL_PROXY_HOST_PORT_MIN + 1
         ) + _CONTROL_PROXY_HOST_PORT_MIN
-        if port in reserved_tcp_ports:
-            continue
-        try:
-            with socket.create_connection((host_ip, port), timeout=0.5):
-                continue
-        except OSError:
+        if port not in used_ports:
             return port
     raise RuntimeError("failed to allocate control proxy host port")
 
