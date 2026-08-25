@@ -15,6 +15,9 @@ from schema.sandbox.command_outputs import (
 
 
 OUTPUT_CHUNK_LINE_COUNT = 200
+EXCERPT_HEAD_LINES = 80
+EXCERPT_TAIL_LINES = 120
+EXCERPT_MAX_BYTES = 32 * 1024
 OUTPUT_DIR = "/tmp/shell-command-output"
 COMMAND_TIMEOUT_ERROR = "Command execution timed out."
 _OUTPUT_PREFIX = f"{OUTPUT_DIR}/"
@@ -102,6 +105,16 @@ def parse_capture_stats(raw: str) -> tuple[int, int]:
     return output_bytes, output_lines
 
 
+def excerpt_command(output_file: str) -> str:
+    quoted_output_file = shlex.quote(validate_output_path(output_file))
+    return (
+        f"test -f {quoted_output_file} || exit 1; "
+        f"head -n {EXCERPT_HEAD_LINES} {quoted_output_file}; "
+        "printf '\\n... omitted ...\\n'; "
+        f"tail -n {EXCERPT_TAIL_LINES} {quoted_output_file}"
+    )
+
+
 def read_command(output_file: str, start_line: int, line_count: int) -> tuple[str, int, int, int]:
     start, count, end = normalize_read_range(start_line, line_count)
     quoted_output_file = shlex.quote(validate_output_path(output_file))
@@ -121,6 +134,22 @@ def output_chunk(*, output_file: str, start_line: int, line_count: int, content:
         end_line=end,
         content=content,
     )
+
+
+def excerpt_text(content: str) -> tuple[str, bool]:
+    raw = content or ""
+    truncated = False
+    encoded = raw.encode("utf-8")
+    if len(encoded) > EXCERPT_MAX_BYTES:
+        raw = encoded[:EXCERPT_MAX_BYTES].decode("utf-8", errors="ignore")
+        truncated = True
+    lines = raw.splitlines()
+    if len(lines) <= EXCERPT_HEAD_LINES + EXCERPT_TAIL_LINES:
+        return "\n".join(lines), truncated
+    omitted = len(lines) - EXCERPT_HEAD_LINES - EXCERPT_TAIL_LINES
+    head = lines[:EXCERPT_HEAD_LINES]
+    tail = lines[-EXCERPT_TAIL_LINES:]
+    return "\n".join([*head, f"... {omitted} lines omitted ...", *tail]), True
 
 
 def normalize_read_range(start_line: int, line_count: int) -> tuple[int, int, int]:

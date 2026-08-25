@@ -9,6 +9,7 @@ class AgentToolSnapshot:
     sandbox_container_generation: int = 0
     sandbox_skill_metadata: tuple[str, ...] = ()
     work_project_id: int | None = None
+    flow_bound: bool = False
 
     @classmethod
     def from_context(cls, context: AgentRuntimeContext) -> "AgentToolSnapshot":
@@ -17,4 +18,5 @@ class AgentToolSnapshot:
             sandbox_container_generation=context.sandbox_container_generation,
             sandbox_skill_metadata=context.sandbox_skill_metadata,
             work_project_id=context.work_project_id,
+            flow_bound=context.flow_bound,
         )

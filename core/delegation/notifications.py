@@ -101,11 +101,14 @@ def _sandbox_async_job_prompt(notification: AgentNotificationSnapshot) -> str:
     ]
     if error_preview:
         sections.append(f"## Error Preview\n\n{error_preview}")
+    excerpt = str(payload.get("output_excerpt") or "").strip()
+    if excerpt:
+        sections.append(f"## Output Excerpt\n\n{excerpt}")
 
     sections.append(
         "## Next Step\n\n"
-        "The command is terminal. Read any relevant captured output, then continue or report "
-        "the result.",
+        "The command is terminal. Use the excerpt if it is sufficient. Read captured output "
+        "only when you need lines outside the excerpt, then continue.",
     )
     return "\n\n".join(sections)
 

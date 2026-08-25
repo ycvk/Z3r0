@@ -244,6 +244,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/flows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Flows Route */
+        get: operations["list_flows_route_api_flows_get"];
+        put?: never;
+        /** Create Flow Route */
+        post: operations["create_flow_route_api_flows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/flows/{public_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Flow Route */
+        get: operations["get_flow_route_api_flows__public_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/flows/{public_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Flow Route */
+        post: operations["cancel_flow_route_api_flows__public_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/flows/{public_id}/input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Flow Input Route */
+        post: operations["submit_flow_input_route_api_flows__public_id__input_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/flows/{public_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Flow Report Route */
+        get: operations["download_flow_report_route_api_flows__public_id__report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/hosts": {
         parameters: {
             query?: never;
@@ -1681,6 +1767,20 @@ export interface components {
              */
             message: string;
         };
+        /** CommonResponse[FlowSchema] */
+        CommonResponse_FlowSchema_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["FlowSchema"] | null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
         /** CommonResponse[InstanceConfigSchema] */
         CommonResponse_InstanceConfigSchema_: {
             /**
@@ -1787,6 +1887,20 @@ export interface components {
              */
             code: number;
             data?: components["schemas"]["ListContainerFilesResponse"] | null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
+        /** CommonResponse[ListFlowsResponse] */
+        CommonResponse_ListFlowsResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["ListFlowsResponse"] | null;
             /**
              * Message
              * @default success
@@ -2311,6 +2425,15 @@ export interface components {
             /** @default http */
             proxy_type: components["schemas"]["EgressProxyType"];
         };
+        /** CreateFlowRequest */
+        CreateFlowRequest: {
+            /** Goal */
+            goal: string;
+            /** Project Id */
+            project_id?: number | null;
+            /** Sandbox Container Id */
+            sandbox_container_id: number;
+        };
         /** CreateManagedHostRequest */
         CreateManagedHostRequest: {
             /**
@@ -2563,6 +2686,124 @@ export interface components {
              * @enum {string}
              */
             type: "error";
+        };
+        /** FlowInputRequest */
+        FlowInputRequest: {
+            /** Text */
+            text: string;
+        };
+        /** FlowSchema */
+        FlowSchema: {
+            /** Ask Question */
+            ask_question?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Goal */
+            goal: string;
+            /** Id */
+            id: number;
+            /** Owner Id */
+            owner_id: number;
+            /** Project Id */
+            project_id?: number | null;
+            /** Public Id */
+            public_id: string;
+            /** Report Id */
+            report_id?: string | null;
+            /** Sandbox Container Id */
+            sandbox_container_id: number;
+            /** Session Id */
+            session_id: string;
+            /** Started At */
+            started_at?: string | null;
+            status: components["schemas"]["FlowStatus"];
+            /** Subtasks */
+            subtasks?: components["schemas"]["FlowSubtaskSchema"][];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * FlowStatus
+         * @enum {string}
+         */
+        FlowStatus: "queued" | "planning" | "running" | "waiting" | "reporting" | "completed" | "failed" | "cancelled";
+        /** FlowSubtaskSchema */
+        FlowSubtaskSchema: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Id */
+            id: number;
+            /** Position */
+            position: number;
+            status: components["schemas"]["FlowSubtaskStatus"];
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * FlowSubtaskStatus
+         * @enum {string}
+         */
+        FlowSubtaskStatus: "planned" | "running" | "done" | "skipped" | "failed";
+        /** FlowSummarySchema */
+        FlowSummarySchema: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id: number;
+            /** Project Id */
+            project_id?: number | null;
+            /** Public Id */
+            public_id: string;
+            /** Sandbox Container Id */
+            sandbox_container_id: number;
+            /** Started At */
+            started_at?: string | null;
+            status: components["schemas"]["FlowStatus"];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** InstanceConfigSchema */
         InstanceConfigSchema: {
@@ -2860,6 +3101,17 @@ export interface components {
             files: components["schemas"]["ContainerFileInfo"][];
             /** Path */
             path: string;
+        };
+        /** ListFlowsResponse */
+        ListFlowsResponse: {
+            /** Items */
+            items: components["schemas"]["FlowSummarySchema"][];
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+            /** Total */
+            total: number;
         };
         /** ListManagedHostImagesResponse */
         ListManagedHostImagesResponse: {
@@ -3327,7 +3579,7 @@ export interface components {
          * SessionType
          * @enum {string}
          */
-        SessionType: "chat" | "project";
+        SessionType: "chat" | "project" | "flow";
         /** SubagentTaskEvent */
         SubagentTaskEvent: {
             /** Agent Code */
@@ -5539,6 +5791,316 @@ export interface operations {
                 };
             };
             /** @description Egress proxy not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    list_flows_route_api_flows_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_ListFlowsResponse_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    create_flow_route_api_flows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFlowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_FlowSchema_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Flow not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    get_flow_route_api_flows__public_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_FlowSchema_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Flow not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    cancel_flow_route_api_flows__public_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_FlowSchema_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Flow not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    submit_flow_input_route_api_flows__public_id__input_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FlowInputRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_FlowSchema_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Flow not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    download_flow_report_route_api_flows__public_id__report_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Flow not found */
             404: {
                 headers: {
                     [name: string]: unknown;

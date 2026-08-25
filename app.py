@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from config import ROOT_PATH, get_config
 
 from core.delegation.subagents import start_subagent_runtime, stop_subagent_runtime
+from core.flow.controller import start_flow_runtime, stop_flow_runtime
 from core.lightrag.runtime import start_lightrag, stop_lightrag
 from core.runtime.session import get_agent_pool
 from core.sandbox.command_jobs import start_async_sandbox_runtime, stop_async_sandbox_commands
@@ -25,6 +26,7 @@ from middleware.system_user import JwtAuthMiddleware
 from router.agent.agents import router as agent_router
 from router.agent.sessions import router as agent_session_router
 from router.common.fallback import api_not_found_router
+from router.flow.flows import router as flow_router
 from router.egress_proxy.proxies import router as egress_proxy_router
 from router.host.hosts import router as host_router
 from router.knowledge.resources import router as knowledge_router
@@ -162,6 +164,8 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 
             await get_agent_pool().start()
             shutdown_steps.append(("agent pool", _stop_current_agent_pool))
+            await start_flow_runtime()
+            shutdown_steps.append(("flow runtime", stop_flow_runtime))
             set_agent_tool_binding_invalidator(_invalidate_current_agent_tool_bindings)
             shutdown_steps.append(("agent tool bindings", _reset_agent_tool_bindings))
 
@@ -202,6 +206,7 @@ def create_app() -> FastAPI:
     app.include_router(knowledge_router, prefix=API_PREFIX)
     app.include_router(agent_router, prefix=API_PREFIX)
     app.include_router(agent_session_router, prefix=API_PREFIX)
+    app.include_router(flow_router, prefix=API_PREFIX)
     app.include_router(system_config_router, prefix=API_PREFIX)
     app.include_router(api_not_found_router, prefix=API_PREFIX)
     logger.debug("api router added")

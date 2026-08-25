@@ -15,11 +15,14 @@ from agents import (
 )
 
 from config import AgentConfig, WORKSPACE, get_config
+from core.agent.constants import DEFAULT_AGENT_CODE
 from core.agent.instructions import build_instructions
 from core.agent.models import build_openai_model
 from core.agent.specs import AGENT_SPECS, AgentSpec, ToolMount
 from core.agent.tool_snapshot import AgentToolSnapshot
 from core.delegation.subagents import build_subagent_tools
+from core.flow.graph import flow_mounts_for_spec, is_terminal_dispatch_tool
+from core.flow.prompts import FLOW_PRIMARY_ADDENDUM, FLOW_SPECIALIST_ADDENDUM
 from core.runtime.context import AgentRuntimeContext
 from core.tools.reports import export_report
 from core.tools.sandbox import (
@@ -41,7 +44,7 @@ async def _end_turn_after_async_dispatch(
     A failed dispatch is not terminal, letting the agent react in the same turn.
     """
     for result in results:
-        if getattr(result.tool, "name", None) != execute_async_command.name:
+        if not is_terminal_dispatch_tool(getattr(result.tool, "name", None)):
             continue
         try:
             status = json.loads(result.output).get("status")
@@ -104,23 +107,28 @@ class AgentRegistry:
         agent_path = WORKSPACE / "agents" / spec.code
         soul = (agent_path / "SOUL.md").read_text(encoding="utf-8").strip()
         rules = (agent_path / "AGENTS.md").read_text(encoding="utf-8").strip()
+        mounts = flow_mounts_for_spec(spec) if graph.tool_snapshot.flow_bound else spec.tools
+        flow_bound = graph.tool_snapshot.flow_bound
         instructions = build_instructions(
             soul,
             rules,
             graph.tool_snapshot.sandbox_skill_metadata,
             has_sandbox_container=graph.tool_snapshot.sandbox_container_id is not None,
-            include_sandbox_commands=_has_tool(spec, execute_sync_command) or _has_tool(spec, execute_async_command),
-            include_sandbox_skills=_has_tool(spec, load_skill),
+            include_sandbox_commands=_has_command_tool(mounts),
+            include_sandbox_skills=_has_tool_in(mounts, load_skill),
             include_work_project_tools=(
                 graph.tool_snapshot.work_project_id is not None
-                and _has_work_project_tool(spec)
+                and any(mount.requires_work_project for mount in mounts)
             ),
             include_delegation_tools=bool(spec.subagents),
-            include_report_tools=_has_tool(spec, export_report),
+            include_report_tools=_has_tool_in(mounts, export_report),
+            flow_addendum=(
+                FLOW_PRIMARY_ADDENDUM if spec.code == DEFAULT_AGENT_CODE else FLOW_SPECIALIST_ADDENDUM
+            ) if flow_bound else "",
         )
 
         tools: list[Tool] = [
-            mount.tool for mount in spec.tools
+            mount.tool for mount in mounts
             if _tool_mount_available(mount, graph.tool_snapshot)
         ]
         if spec.subagents:
@@ -180,6 +188,14 @@ class SessionAgentGraph:
 
 def _has_tool(spec: AgentSpec, tool: Tool) -> bool:
     return any(mount.tool is tool for mount in spec.tools)
+
+
+def _has_tool_in(mounts: tuple[ToolMount, ...], tool: Tool) -> bool:
+    return any(mount.tool is tool for mount in mounts)
+
+
+def _has_command_tool(mounts: tuple[ToolMount, ...]) -> bool:
+    return any(is_terminal_dispatch_tool(getattr(mount.tool, "name", None)) or mount.tool is execute_sync_command for mount in mounts)
 
 
 def _assemble_instructions(

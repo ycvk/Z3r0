@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from core.runtime.context import AgentRuntimeContext
 from core.runtime.coordination import resume_target_agent_instance
-from core.sandbox.command_output import COMMAND_TIMEOUT_ERROR
+from core.sandbox.command_output import COMMAND_TIMEOUT_ERROR, excerpt_command, excerpt_text
 from logger import get_logger
 from schema.sandbox.async_jobs import SandboxAsyncJobSnapshot
 from service.sandbox import async_jobs as sandbox_async_jobs
@@ -269,10 +269,35 @@ async def _queue_completion_notification(snapshot: SandboxAsyncJobSnapshot | Non
     # result or re-evaluates when dormant. The kick is a no-op when nothing pends.
     if snapshot is None:
         return
+    await _attach_output_excerpt(snapshot)
     try:
         await resume_target_agent_instance(snapshot.session_id, snapshot.agent_instance_id)
     except Exception:
         logger.exception("failed to resume owner after async job completion: %s", snapshot.run_id)
+
+
+async def _attach_output_excerpt(snapshot: SandboxAsyncJobSnapshot) -> None:
+    if not snapshot.output_file or snapshot.sandbox_container_id is None:
+        return
+    try:
+        result = await execute_sandbox_container_command(
+            id=snapshot.sandbox_container_id,
+            command=excerpt_command(snapshot.output_file),
+            timeout_seconds=_OUTPUT_STAT_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        logger.debug("failed to read sandbox command excerpt", exc_info=True)
+        return
+    if result.exit_code != 0:
+        return
+    excerpt, truncated = excerpt_text(result.output)
+    if not excerpt:
+        return
+    from service.agent import notifications as agent_notifications
+    await agent_notifications.merge_payload_by_run_id(
+        snapshot.run_id,
+        {"output_excerpt": excerpt, "output_truncated": truncated},
+    )
 
 
 async def _queue_completion_notifications(snapshots: list[SandboxAsyncJobSnapshot]) -> None:

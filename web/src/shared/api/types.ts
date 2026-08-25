@@ -285,3 +285,18 @@ export type AgentImageInputPart = components["schemas"]["AgentImageInputPart"];
 
 export type AgentContentEvent = NonNullable<ListAgentEventsResponse["data"]>["items"][number];
 export type AgentStreamEvent = components["schemas"]["AgentEventSchema"];
+
+export type QueryFlowsParams = QueryParameters<paths["/api/flows"]["get"]>;
+export type QueryFlowsResponse = JsonResponse<paths["/api/flows"]["get"]>;
+export type FlowSummary = NonNullable<QueryFlowsResponse["data"]>["items"][number];
+export type Flow = components["schemas"]["FlowSchema"];
+export type FlowSubtask = components["schemas"]["FlowSubtaskSchema"];
+export type FlowStatus = components["schemas"]["FlowStatus"];
+export type FlowSubtaskStatus = components["schemas"]["FlowSubtaskStatus"];
+export type CreateFlowRequest = JsonRequestBody<paths["/api/flows"]["post"]>;
+export type CreateFlowResponse = JsonResponse<paths["/api/flows"]["post"]>;
+export type GetFlowResponse = JsonResponse<paths["/api/flows/{public_id}"]["get"]>;
+export type FlowPathParams = PathParameters<paths["/api/flows/{public_id}"]["get"]>;
+export type CancelFlowResponse = JsonResponse<paths["/api/flows/{public_id}/cancel"]["post"]>;
+export type SubmitFlowInputRequest = JsonRequestBody<paths["/api/flows/{public_id}/input"]["post"]>;
+export type SubmitFlowInputResponse = JsonResponse<paths["/api/flows/{public_id}/input"]["post"]>;
