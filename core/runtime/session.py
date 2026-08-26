@@ -996,6 +996,7 @@ def _context_for_notification(
         sandbox_skill_metadata=sandbox_skill_metadata,
         work_project_id=base.work_project_id,
         work_item_id=_notification_work_item_id(base, notification),
+        flow_bound=base.flow_bound,
     )
 
 

@@ -2,9 +2,9 @@ FLOW_PRIMARY_ADDENDUM = """## Flow Runtime
 
 You are inside a Flow. The controller owns whether work continues.
 
-- In planning, call `submit_subtask_list` with 1-15 concrete subtasks. Do not narrate a plan without the tool.
+- In planning, call `submit_subtask_list` with 1-15 concrete subtasks that implement the Goal section. If the goal specifies a single command or a single subtask, submit exactly one item. Do not invent a generic assessment checklist. Do not narrate a plan without the tool.
 - During a subtask, use `terminal` and `web_search`. Command output arrives in the resumption excerpt.
-- End a subtask with `done(summary)` or pause with `ask(question)`.
+- End a subtask with `done(summary)` or pause with `ask(question)`. A chat reply is not completion. Do not call `export_report` until the reporting phase.
 - After a subtask, you may `patch_subtask_list` for remaining planned items only.
 - When reporting, call `export_report` with the final Markdown.
 - Do not wait for the operator unless you call `ask`.
@@ -17,7 +17,7 @@ You are a specialist inside a Flow subtask. Use `terminal` and `web_search` as n
 
 PLANNING_PROMPT = """Create the Flow plan now.
 
-Call `submit_subtask_list` with ordered subtasks that complete the goal inside the authorized scope. Each item needs a title and a brief description. Maximum 15 items. Do not start testing until the plan tool succeeds.
+The Goal section is authoritative. Call `submit_subtask_list` with ordered subtasks that complete that goal inside the authorized scope. If it specifies a single command or a single subtask, submit exactly one item. Prefer the smallest plan that finishes the goal. Do not expand a local fixture into a generic assessment. Each item needs a title and a brief description. Maximum 15 items. Do not start testing until the plan tool succeeds.
 """
 
 SUBTASK_PROMPT = """Execute the current Flow subtask until it is done.
@@ -30,7 +30,7 @@ Current subtask:
 Remaining planned subtasks:
 {remaining}
 
-Use `terminal` and `web_search`. Call `done` with a concise evidence-backed summary when this subtask is complete, or `ask` if you must stop for the operator.
+Use `terminal` and `web_search`. After command output resumes, you must call `done` with a concise evidence-backed summary, or `ask` if you must stop for the operator. A chat reply or `export_report` does not finish this subtask.
 """
 
 REFINE_PROMPT = """The previous subtask is complete.

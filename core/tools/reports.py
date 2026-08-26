@@ -2,6 +2,7 @@ from agents import RunContextWrapper, function_tool
 
 from core.runtime.context import AgentRuntimeContext
 from schema.common.tool_results import ToolResultSchema, ToolResultStatusSchema, ToolResultTypeSchema
+from schema.flow.flows import FlowStatus
 from service.agent.reports import export_session_report
 
 
@@ -18,6 +19,14 @@ async def export_report(ctx: RunContextWrapper[AgentRuntimeContext], content: st
     Returns:
         A JSON tool result containing the export status and report metadata.
     """
+    if ctx.context.flow_bound:
+        from service.flow.records import load_flow_row_by_session
+        flow = await load_flow_row_by_session(ctx.context.session_id)
+        if flow is None or flow.status != FlowStatus.REPORTING:
+            return _report_result(
+                ToolResultStatusSchema.ERROR,
+                "export_report is only available in the Flow reporting phase. Call done or ask instead.",
+            )
     try:
         report = await export_session_report(ctx.context.session_id, content)
     except Exception as exc:

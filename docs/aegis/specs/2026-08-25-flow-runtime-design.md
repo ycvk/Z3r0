@@ -371,18 +371,11 @@ new stack. That evaluation is out of scope until this spec is implemented.
 - Operators expect one-click sandbox create. Explicitly deferred; do not
   expand this slice.
 
-## 14. ADR signal (not an accepted ADR yet)
+## 14. ADR
 
-After implementation, record an ADR:
+Recorded after implementation: `docs/aegis/adr/ADR-0001-flow-is-a-separate-aggregate.md`.
 
-- Decision: Flow runtime is a separate aggregate from `AgentSession`; chat
-  is not upgraded into a planner
-- Alternatives rejected: WorkItem-as-plan; CSO-prompt-as-loop; Go/Eino or
-  Rust rewrite; Playground dual-mode session
-- Baseline sync: update the architecture baseline owner map to include
-  `core/flow/`
-
-Do not treat this spec as accepted architecture memory until the code exists.
+Baseline sync: `docs/aegis/baseline/2026-08-26-flow-runtime.md`.
 
 ## 15. Implementation notes for the later plan
 

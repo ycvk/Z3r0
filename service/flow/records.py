@@ -72,7 +72,10 @@ def to_schema(flow: Flow, subtasks: list[FlowSubtask] | tuple[FlowSubtask, ...] 
         ask_question=flow.ask_question,
         report_id=flow.report_id,
         error=flow.error,
-        subtasks=[_subtask_schema(item) for item in sorted(subtasks, key=lambda row: row.position)],
+        subtasks=[
+            _subtask_schema(item)
+            for item in sorted(subtasks, key=lambda row: (row.position, row.id or 0))
+        ],
         created_at=flow.created_at,
         updated_at=flow.updated_at,
         started_at=flow.started_at,
@@ -234,6 +237,11 @@ async def load_flow_row(public_id: str) -> Flow | None:
         return (await session.exec(select(Flow).where(Flow.public_id == public_id))).one_or_none()
 
 
+async def load_flow_row_by_session(session_id: str) -> Flow | None:
+    async with get_async_session() as session:
+        return (await session.exec(select(Flow).where(Flow.session_id == session_id))).one_or_none()
+
+
 async def list_recoverable_flow_ids() -> list[str]:
     async with get_async_session() as session:
         rows = (await session.exec(
@@ -378,16 +386,30 @@ async def fail_flow_run(public_id: str, error: str) -> None:
         await session.commit()
 
 
+def reindex_flow_subtasks(
+    frozen: list[FlowSubtask],
+    planned: list[FlowSubtask],
+    now: datetime,
+) -> None:
+    """Assign unique global positions: finished rows first, then remaining planned rows."""
+    for index, row in enumerate((*frozen, *planned)):
+        if row.position != index:
+            row.position = index
+            row.updated_at = now
+
+
 async def apply_plan_patch(public_id: str, ops: list[dict[str, object]]) -> None:
     async with get_async_session() as session:
         flow = await lock_flow_by_public_id(session, public_id)
         if flow is None or flow.id is None or not ops:
             return
-        planned = list((await session.exec(
+        rows = list((await session.exec(
             select(FlowSubtask)
-            .where(FlowSubtask.flow_id == flow.id, FlowSubtask.status == FlowSubtaskStatus.PLANNED)
-            .order_by(col(FlowSubtask.position))
+            .where(FlowSubtask.flow_id == flow.id)
+            .order_by(col(FlowSubtask.position), col(FlowSubtask.id))
         )).all())
+        frozen = [row for row in rows if row.status != FlowSubtaskStatus.PLANNED]
+        planned = [row for row in rows if row.status == FlowSubtaskStatus.PLANNED]
         now = datetime.now()
         for raw in ops:
             op = str(raw.get("op") or "")
@@ -414,10 +436,11 @@ async def apply_plan_patch(public_id: str, ops: list[dict[str, object]]) -> None
                 title = str(raw.get("title") or "").strip()
                 if not title:
                     continue
-                insert_at = min(max(position, 0), len(planned))
+                insert_at = sum(1 for row in planned if row.position < position)
+                insert_at = min(max(insert_at, 0), len(planned))
                 row = FlowSubtask(
                     flow_id=flow.id,
-                    position=insert_at,
+                    position=position,
                     title=title[:160],
                     description=str(raw.get("description") or ""),
                     status=FlowSubtaskStatus.PLANNED,
@@ -426,11 +449,9 @@ async def apply_plan_patch(public_id: str, ops: list[dict[str, object]]) -> None
                 )
                 planned.insert(insert_at, row)
                 session.add(row)
-        for index, row in enumerate(planned):
-            if row.position != index:
-                row.position = index
-                row.updated_at = now
-                session.add(row)
+        reindex_flow_subtasks(frozen, planned, now)
+        for row in (*frozen, *planned):
+            session.add(row)
         flow.updated_at = now
         session.add(flow)
         await session.commit()

@@ -113,9 +113,12 @@ async def _run_flow(public_id: str) -> None:
                 if answer is None:
                     return
                 await flow_records.update_flow_status(public_id, FlowStatus.RUNNING, ask_question=None)
-                await _run_turn(flow_schema.session_id, user, f"Operator answer:\n{answer}")
-                await _wait_idle(flow_schema.session_id)
-                if not await _consume_primary_barrier(public_id, user, allow_done=True, allow_ask=True, allow_patch=False):
+                if not await _run_subtask(
+                    public_id,
+                    user,
+                    flow_schema.session_id,
+                    f"Operator answer:\n{answer}",
+                ):
                     return
                 continue
             running = next((item for item in flow_schema.subtasks if item.status == FlowSubtaskStatus.RUNNING), None)
@@ -133,10 +136,13 @@ async def _run_flow(public_id: str) -> None:
                 f"- {item.title}" for item in flow_schema.subtasks
                 if item.status == FlowSubtaskStatus.PLANNED
             ]
-            prompt = SUBTASK_PROMPT.format(
-                title=running_title,
-                description=running_description or "No additional description.",
-                remaining="\n".join(remaining) or "- none",
+            prompt = _with_goal(
+                SUBTASK_PROMPT.format(
+                    title=running_title,
+                    description=running_description or "No additional description.",
+                    remaining="\n".join(remaining) or "- none",
+                ),
+                flow_schema.goal,
             )
             if not await _run_subtask(public_id, user, flow_schema.session_id, prompt):
                 return
@@ -158,7 +164,7 @@ async def _plan(public_id: str, user: AuthUser) -> bool:
     await flow_records.update_flow_status(public_id, FlowStatus.PLANNING)
     for _ in range(_PLANNING_ATTEMPTS):
         pop_barrier(flow.session_id)
-        await _run_turn(flow.session_id, user, PLANNING_PROMPT)
+        await _run_turn(flow.session_id, user, _with_goal(PLANNING_PROMPT, flow.goal))
         await _wait_idle(flow.session_id)
         barrier = pop_barrier(flow.session_id)
         if barrier is not None and barrier.kind == "submit_plan":
@@ -170,10 +176,17 @@ async def _plan(public_id: str, user: AuthUser) -> bool:
     return False
 
 
+_SUBTASK_RETRY_PROMPT = (
+    "The current subtask is still open. Call `done` with a concise evidence-backed summary "
+    "from the last command output, or `ask` if you must stop. "
+    "Do not call `export_report`. Do not repeat a successful `terminal` command."
+)
+
+
 async def _run_subtask(public_id: str, user: AuthUser, session_id: str, prompt: str) -> bool:
-    for _ in range(_SUBTASK_ATTEMPTS):
+    for attempt in range(_SUBTASK_ATTEMPTS):
         pop_barrier(session_id)
-        await _run_turn(session_id, user, prompt)
+        await _run_turn(session_id, user, prompt if attempt == 0 else _SUBTASK_RETRY_PROMPT)
         await _wait_idle(session_id)
         if await _consume_primary_barrier(public_id, user, allow_done=True, allow_ask=True, allow_patch=False):
             return True
@@ -278,6 +291,11 @@ async def _wait_for_input(public_id: str) -> str | None:
     await event.wait()
     event.clear()
     return _input_text.pop(public_id, None)
+
+
+def _with_goal(body: str, goal: str) -> str:
+    cleaned = goal.strip() or "No goal provided."
+    return f"Goal:\n{cleaned}\n\n{body}"
 
 
 async def _auth_user(user_id: int) -> AuthUser | None:
