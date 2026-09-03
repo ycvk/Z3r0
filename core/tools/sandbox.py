@@ -89,7 +89,7 @@ async def execute_sync_command(
         return _error_result(error)
     command_text = command.strip()
     if not command_text:
-        return _error_result("sandbox container command is required")
+        return _error_result("Sandbox container command is required")
     if reason := check_command_guard(command_text, session_id=ctx.context.session_id):
         return _error_result(
             f"[Command Guard] High-risk command intercepted ({reason}): `{command_text}`. "
@@ -133,7 +133,7 @@ async def execute_async_command(
     The runtime resumes the task after completion and supplies terminal result
     metadata. Never poll or read a running job. The dispatch result includes
     `status` and the persistent `run_id`; captured output is available after completion.
-    Each Agent may run at most three background commands concurrently.
+    Each agent may run at most three background commands concurrently.
 
     Args:
         command: Shell command to execute.
@@ -149,14 +149,14 @@ async def execute_async_command(
         return _error_result(error)
     command_text = command.strip()
     if not command_text:
-        return _error_result("sandbox container command is required")
+        return _error_result("Sandbox container command is required")
     if reason := check_command_guard(command_text, session_id=ctx.context.session_id):
         return _error_result(
             f"[Command Guard] High-risk command intercepted ({reason}): `{command_text}`. "
             "Ask the operator to reply ALLOW in chat before re-running this exact command."
         )
     if not ctx.context.agent_instance_id:
-        return _error_result("agent instance id is required for async command execution")
+        return _error_result("Agent instance ID is required for async command execution")
 
     running_jobs = await sandbox_async_jobs.count_running_async_jobs_for_agent(
         session_id=ctx.context.session_id,
@@ -164,7 +164,7 @@ async def execute_async_command(
     )
     if running_jobs >= _ASYNC_COMMAND_CONCURRENCY_LIMIT:
         return _error_result(
-            f"sandbox async command limit reached; at most {_ASYNC_COMMAND_CONCURRENCY_LIMIT} commands may run concurrently",
+            f"Sandbox async command limit reached; at most {_ASYNC_COMMAND_CONCURRENCY_LIMIT} commands may run concurrently",
         )
 
     timeout = _clamp_timeout(timeout_seconds, _ASYNC_COMMAND_TIMEOUT_SECONDS)
@@ -250,7 +250,7 @@ async def cancel_sandbox_async_job(ctx: RunContextWrapper[AgentRuntimeContext], 
     """
     snapshot = await sandbox_async_jobs.get_async_job(run_id.strip(), session_id=ctx.context.session_id)
     if snapshot is None or snapshot.agent_instance_id != ctx.context.agent_instance_id:
-        return _error_result("sandbox async job not found")
+        return _error_result("Sandbox async job not found")
     await cancel_async_sandbox_command(snapshot.run_id)
     latest = await sandbox_async_jobs.get_async_job(snapshot.run_id, session_id=ctx.context.session_id)
     return command_output.result_metadata_from_snapshot(
@@ -316,7 +316,7 @@ def _loaded_skill_body(
     body = markdown_body_without_front_matter(markdown).strip()
     parts = [
         (
-            "## Skill Resource Root\n\n"
+            "## Skill resource root\n\n"
             f"`{skill_root}`\n\n"
             "Use sandbox command tools for reads, inspection, execution, and other file operations under this root."
         ),
@@ -329,11 +329,11 @@ def _loaded_skill_body(
 
 def _skill_resource_files_section(files: tuple[str, ...], truncated: bool) -> str:
     if not files:
-        return "## Skill Resource Files\n\nNone."
+        return "## Skill resource files\n\nNone."
     lines = [f"- `{path}`" for path in files]
     if truncated:
         lines.append(f"- ... truncated after {_MAX_SKILL_RESOURCE_FILES} files")
-    return "## Skill Resource Files\n\nPaths are relative to `Skill Resource Root`:\n\n" + "\n".join(lines)
+    return "## Skill resource files\n\nPaths are relative to `Skill resource root`:\n\n" + "\n".join(lines)
 
 
 @function_tool
