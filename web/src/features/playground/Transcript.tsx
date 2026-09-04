@@ -158,7 +158,8 @@ const MarkdownText = memo(function MarkdownText({ text, streaming }: { text: str
     [renderText, streaming],
   );
   if (!renderText && !streaming) return null;
-  return <MarkdownContent className="agent-text" content={markdown} mode="document" mermaid={!streaming} />;
+  // Open Mermaid fences are downgraded by normalizeMarkdownForRender, so closed diagrams can render live.
+  return <MarkdownContent className="agent-text" content={markdown} mode="document" mermaid />;
 });
 
 function ThinkingGroup({
