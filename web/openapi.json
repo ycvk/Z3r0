@@ -3292,6 +3292,106 @@
         "title": "FlowSummarySchema",
         "type": "object"
       },
+      "FofaAssetSchema": {
+        "additionalProperties": false,
+        "description": "Canonical asset fields returned by the FOFA search tool.",
+        "properties": {
+          "domain": {
+            "default": "",
+            "title": "Domain",
+            "type": "string"
+          },
+          "host": {
+            "default": "",
+            "title": "Host",
+            "type": "string"
+          },
+          "ip": {
+            "default": "",
+            "title": "Ip",
+            "type": "string"
+          },
+          "org": {
+            "default": "",
+            "title": "Org",
+            "type": "string"
+          },
+          "port": {
+            "default": "",
+            "title": "Port",
+            "type": "string"
+          },
+          "protocol": {
+            "default": "",
+            "title": "Protocol",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "FofaAssetSchema",
+        "type": "object"
+      },
+      "FofaConfig": {
+        "additionalProperties": false,
+        "description": "Configuration for the optional FOFA asset-search integration.",
+        "properties": {
+          "api_key": {
+            "default": "",
+            "maxLength": 256,
+            "title": "Api Key",
+            "type": "string"
+          },
+          "base_url": {
+            "default": "https://fofa.info",
+            "minLength": 1,
+            "title": "Base Url",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "title": "FofaConfig",
+        "type": "object"
+      },
+      "FofaSearchResultSchema": {
+        "additionalProperties": false,
+        "description": "Paginated FOFA search response exposed by the function tool.",
+        "properties": {
+          "current_page": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Current Page",
+            "type": "integer"
+          },
+          "query": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/FofaAssetSchema"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "total_size": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Total Size",
+            "type": "integer"
+          }
+        },
+        "title": "FofaSearchResultSchema",
+        "type": "object"
+      },
       "InstanceConfigSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3307,6 +3407,9 @@
             },
             "title": "Agents",
             "type": "object"
+          },
+          "fofa": {
+            "$ref": "#/components/schemas/FofaConfig"
           },
           "lightrag": {
             "$ref": "#/components/schemas/LightRAGConfig"
@@ -5779,7 +5882,8 @@
         "enum": [
           "skill_detail",
           "work_project",
-          "report"
+          "report",
+          "fofa"
         ],
         "title": "ToolResultTypeSchema",
         "type": "string"
@@ -5988,6 +6092,9 @@
             "title": "Agents",
             "type": "object"
           },
+          "fofa": {
+            "$ref": "#/components/schemas/FofaConfig"
+          },
           "lightrag": {
             "$ref": "#/components/schemas/LightRAGConfig"
           }
@@ -5996,7 +6103,8 @@
           "agents",
           "agent_pool",
           "agent_runtime",
-          "lightrag"
+          "lightrag",
+          "fofa"
         ],
         "title": "UpdateInstanceConfigRequest",
         "type": "object"

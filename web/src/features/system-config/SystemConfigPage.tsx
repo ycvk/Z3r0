@@ -1,5 +1,5 @@
 import { Button, Input, InputNumber, Switch, TextArea } from "../../shared/ui/semi";
-import { Bot, DatabaseZap, RotateCcw, Save, Settings, X } from "lucide-react";
+import { Bot, DatabaseZap, Globe2, RotateCcw, Save, Settings, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getInstanceConfig, updateInstanceConfig } from "../../shared/api/systemConfig";
 import { showApiError, showApiSuccess } from "../../shared/api/feedback";
@@ -11,6 +11,7 @@ import type {
   AgentConfig,
   AgentPoolConfig,
   AgentRuntimeConfig,
+  FofaConfig,
   InstanceConfig,
   LightRAGConfig,
   UpdateInstanceConfigRequest,
@@ -20,12 +21,14 @@ import { useMountedRef } from "../../shared/hooks/useMountedRef";
 
 type AgentFormValue = AgentConfig;
 type LightRAGFormValue = LightRAGConfig;
+type FofaFormValue = FofaConfig;
 
 type ConfigFormValue = {
   agents: AgentFormValue[];
   agent_pool: AgentPoolConfig;
   agent_runtime: AgentRuntimeConfig;
   lightrag: LightRAGFormValue;
+  fofa: FofaFormValue;
 };
 
 type FieldKey<T, Value> = {
@@ -59,6 +62,7 @@ const AGENT_CONSTRAINTS = SYSTEM_CONFIG_FIELD_CONSTRAINTS.AgentConfig;
 const POOL_CONSTRAINTS = SYSTEM_CONFIG_FIELD_CONSTRAINTS.AgentPoolConfig;
 const RUNTIME_CONSTRAINTS = SYSTEM_CONFIG_FIELD_CONSTRAINTS.AgentRuntimeConfig;
 const LIGHTRAG_CONSTRAINTS = SYSTEM_CONFIG_FIELD_CONSTRAINTS.LightRAGConfig;
+const FOFA_CONSTRAINTS = SYSTEM_CONFIG_FIELD_CONSTRAINTS.FofaConfig;
 const RATIO_STEP = 0.01;
 
 const RUNTIME_FIELD_GROUPS: ConfigFieldGroup<AgentRuntimeConfig>[] = [
@@ -123,8 +127,8 @@ function ratioField(
 }
 
 function toFormValue(config: InstanceConfig): ConfigFormValue {
-  if (!config.agent_pool || !config.agent_runtime || !config.lightrag) {
-    throw new Error("instance config is incomplete");
+  if (!config.agent_pool || !config.agent_runtime || !config.lightrag || !config.fofa) {
+    throw new Error("Instance config is incomplete");
   }
   const agents = Object.values(config.agents ?? {}).map((agent) => ({ ...agent }));
   return {
@@ -132,6 +136,7 @@ function toFormValue(config: InstanceConfig): ConfigFormValue {
     agent_pool: { ...config.agent_pool },
     agent_runtime: { ...config.agent_runtime },
     lightrag: { ...config.lightrag },
+    fofa: { ...config.fofa },
   };
 }
 
@@ -141,6 +146,7 @@ function cloneFormValue(values: ConfigFormValue): ConfigFormValue {
     agent_pool: { ...values.agent_pool },
     agent_runtime: { ...values.agent_runtime },
     lightrag: { ...values.lightrag },
+    fofa: { ...values.fofa },
   };
 }
 
@@ -171,6 +177,11 @@ function toPayload(values: ConfigFormValue): UpdateInstanceConfigRequest {
       llm_api: values.lightrag.llm_api.trim(),
       llm_key: values.lightrag.llm_key.trim(),
       llm_model: values.lightrag.llm_model.trim(),
+    },
+    fofa: {
+      ...values.fofa,
+      base_url: values.fofa.base_url.trim(),
+      api_key: values.fofa.api_key.trim(),
     },
   };
 }
@@ -238,6 +249,10 @@ export function SystemConfigPage() {
 
   const updateLightRAG = (patch: Partial<LightRAGFormValue>) => {
     setValues((current) => current && { ...current, lightrag: { ...current.lightrag, ...patch } });
+  };
+
+  const updateFofa = (patch: Partial<FofaFormValue>) => {
+    setValues((current) => current && { ...current, fofa: { ...current.fofa, ...patch } });
   };
 
   const updateAgent = (code: string, patch: Partial<AgentConfig>) => {
@@ -321,6 +336,10 @@ export function SystemConfigPage() {
                 <LightRAGConfigEditor value={values.lightrag} onChange={updateLightRAG} />
               </ConfigPanel>
 
+              <ConfigPanel icon={<Globe2 size={18} />} title="FOFA asset search">
+                <FofaConfigEditor value={values.fofa} onChange={updateFofa} />
+              </ConfigPanel>
+
               <ConfigPanel icon={<Bot size={18} />} title="Agents">
                 <div className="agent-config-list">
                   {values.agents.map((agent) => (
@@ -386,6 +405,23 @@ function LightRAGConfigEditor({ value, onChange }: {
           min={LIGHTRAG_CONSTRAINTS.chunk_matches.minimum} max={LIGHTRAG_CONSTRAINTS.chunk_matches.maximum}
           onChange={(chunk_matches) => onChange({ chunk_matches })} />
       </div>
+    </div>
+  );
+}
+
+function FofaConfigEditor({ value, onChange }: {
+  value: FofaFormValue;
+  onChange: (patch: Partial<FofaFormValue>) => void;
+}) {
+  return (
+    <div className="config-grid fofa-config-grid">
+      <Field kind="toggle" label="Enable FOFA tool" value={value.enabled}
+        onChange={(enabled) => onChange({ enabled })} />
+      <Field kind="text" label="Base URL" value={value.base_url}
+        onChange={(base_url) => onChange({ base_url })} />
+      <Field kind="text" label="API key" value={value.api_key}
+        maxLength={FOFA_CONSTRAINTS.api_key.maxLength} password
+        onChange={(api_key) => onChange({ api_key })} />
     </div>
   );
 }

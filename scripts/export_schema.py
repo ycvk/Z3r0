@@ -26,6 +26,7 @@ from schema.agent.events import (
     MAX_AGENT_TOTAL_IMAGE_BYTES,
     RunStateEvent,
 )
+from schema.agent.fofa import FofaAssetSchema, FofaSearchResultSchema
 from schema.agent.subordinates import AgentSubordinateTaskToolItem, AgentSubordinateTaskToolResult
 from schema.common.tool_results import ReportToolResultOutputSchema, ToolResultSchema
 from schema.knowledge.resources import KNOWLEDGE_DOCUMENT_INFLIGHT_STATUSES
@@ -64,7 +65,7 @@ def export_frontend_contract_constants(schema: dict[str, Any]) -> Path:
     enum_constants = _enum_constants_ts(schema)
     config_constraints = _field_constraints(
         schema,
-        ("AgentConfig", "AgentPoolConfig", "AgentRuntimeConfig", "LightRAGConfig"),
+        ("AgentConfig", "AgentPoolConfig", "AgentRuntimeConfig", "LightRAGConfig", "FofaConfig"),
     )
 
     FRONTEND_CONTRACT_CONSTANTS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -267,7 +268,7 @@ def _patch_error_contracts(schema: dict[str, Any]) -> None:
 
 
 def _register_extra_schemas(schema: dict[str, Any]) -> None:
-    """publish ws contracts as OpenAPI components so the frontend can derive types"""
+    """Publish non-route contracts as OpenAPI components for frontend generation."""
     components = schema.setdefault("components", {})
     schemas = components.setdefault("schemas", {})
 
@@ -281,6 +282,8 @@ def _register_extra_schemas(schema: dict[str, Any]) -> None:
         "AgentSubordinateTaskToolResult": AgentSubordinateTaskToolResult,
         "ToolResultSchema": ToolResultSchema,
         "ReportToolResultOutputSchema": ReportToolResultOutputSchema,
+        "FofaAssetSchema": FofaAssetSchema,
+        "FofaSearchResultSchema": FofaSearchResultSchema,
         "SandboxCommandResultMetadata": SandboxCommandResultMetadata,
         "SandboxCommandOutputChunk": SandboxCommandOutputChunk,
     }

@@ -8,6 +8,7 @@ from config import (
     AgentConfig,
     AgentPoolConfig,
     AgentRuntimeConfig,
+    FofaConfig,
     GlobalConfig,
     LightRAGConfig,
     get_config,
@@ -65,6 +66,7 @@ async def update_instance_config(request: UpdateInstanceConfigRequest) -> Instan
             "agent_pool": request.agent_pool,
             "agent_runtime": request.agent_runtime,
             "lightrag": request.lightrag,
+            "fofa": request.fofa,
         })
         write_config_file(next_cfg)
         try:
@@ -125,6 +127,7 @@ def _apply_instance_config(file_cfg: GlobalConfig) -> tuple[bool, bool]:
     current.agent_pool = _copy_agent_pool(file_cfg.agent_pool)
     current.agent_runtime = _copy_agent_runtime(file_cfg.agent_runtime)
     current.lightrag = _copy_lightrag(file_cfg.lightrag)
+    current.fofa = _copy_fofa(file_cfg.fofa)
     return agent_runtime_changed, lightrag_runtime_changed
 
 
@@ -133,6 +136,7 @@ def _agent_runtime_config_changed(current: GlobalConfig, next_cfg: GlobalConfig)
         current.agents != next_cfg.agents
         or current.agent_pool != next_cfg.agent_pool
         or current.agent_runtime != next_cfg.agent_runtime
+        or current.fofa != next_cfg.fofa
     )
 
 
@@ -175,6 +179,10 @@ def _copy_lightrag(lightrag: LightRAGConfig) -> LightRAGConfig:
     return lightrag.model_copy(deep=True)
 
 
+def _copy_fofa(fofa: FofaConfig) -> FofaConfig:
+    return fofa.model_copy(deep=True)
+
+
 def _snapshot_instance_config(cfg: GlobalConfig) -> InstanceConfigSchema:
     return _instance_config_from_global(cfg).model_copy(deep=True)
 
@@ -185,6 +193,7 @@ def _restore_instance_config(snapshot: InstanceConfigSchema) -> None:
     current.agent_pool = _copy_agent_pool(snapshot.agent_pool)
     current.agent_runtime = _copy_agent_runtime(snapshot.agent_runtime)
     current.lightrag = _copy_lightrag(snapshot.lightrag)
+    current.fofa = _copy_fofa(snapshot.fofa)
 
 
 async def rebuild_agent_instances() -> None:
@@ -218,4 +227,5 @@ def _instance_config_from_global(cfg: GlobalConfig) -> InstanceConfigSchema:
         agent_pool=cfg.agent_pool,
         agent_runtime=cfg.agent_runtime,
         lightrag=cfg.lightrag,
+        fofa=cfg.fofa,
     )

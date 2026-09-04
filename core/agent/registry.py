@@ -227,7 +227,13 @@ def _tool_mount_available(mount: ToolMount, snapshot: AgentToolSnapshot) -> bool
     return not (
         (mount.requires_sandbox_container and snapshot.sandbox_container_id is None)
         or (mount.requires_work_project and snapshot.work_project_id is None)
+        or (mount.requires_fofa_config and not _fofa_config_available())
     )
+
+
+def _fofa_config_available() -> bool:
+    cfg = get_config().fofa
+    return cfg.enabled and bool(cfg.base_url.strip()) and bool(cfg.api_key.strip())
 
 
 def _build_subagent_tools(spec: AgentSpec, registry: AgentRegistry) -> list[Tool]:

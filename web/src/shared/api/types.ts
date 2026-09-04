@@ -74,6 +74,7 @@ export type AgentConfig = components["schemas"]["AgentConfig"];
 export type AgentPoolConfig = components["schemas"]["AgentPoolConfig"];
 export type AgentRuntimeConfig = components["schemas"]["AgentRuntimeConfig"];
 export type LightRAGConfig = components["schemas"]["LightRAGConfig"];
+export type FofaConfig = components["schemas"]["FofaConfig"];
 export type GetInstanceConfigResponse = JsonResponse<paths["/api/system-config/instance"]["get"]>;
 export type UpdateInstanceConfigRequest = JsonRequestBody<paths["/api/system-config/instance"]["patch"]>;
 export type UpdateInstanceConfigResponse = JsonResponse<paths["/api/system-config/instance"]["patch"]>;

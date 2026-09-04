@@ -2805,6 +2805,91 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * FofaAssetSchema
+         * @description Canonical asset fields returned by the FOFA search tool.
+         */
+        FofaAssetSchema: {
+            /**
+             * Domain
+             * @default
+             */
+            domain: string;
+            /**
+             * Host
+             * @default
+             */
+            host: string;
+            /**
+             * Ip
+             * @default
+             */
+            ip: string;
+            /**
+             * Org
+             * @default
+             */
+            org: string;
+            /**
+             * Port
+             * @default
+             */
+            port: string;
+            /**
+             * Protocol
+             * @default
+             */
+            protocol: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
+        /**
+         * FofaConfig
+         * @description Configuration for the optional FOFA asset-search integration.
+         */
+        FofaConfig: {
+            /**
+             * Api Key
+             * @default
+             */
+            api_key: string;
+            /**
+             * Base Url
+             * @default https://fofa.info
+             */
+            base_url: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+        };
+        /**
+         * FofaSearchResultSchema
+         * @description Paginated FOFA search response exposed by the function tool.
+         */
+        FofaSearchResultSchema: {
+            /**
+             * Current Page
+             * @default 1
+             */
+            current_page: number;
+            /**
+             * Query
+             * @default
+             */
+            query: string;
+            /** Results */
+            results?: components["schemas"]["FofaAssetSchema"][];
+            /**
+             * Total Size
+             * @default 0
+             */
+            total_size: number;
+        };
         /** InstanceConfigSchema */
         InstanceConfigSchema: {
             agent_pool?: components["schemas"]["AgentPoolConfig"];
@@ -2813,6 +2898,7 @@ export interface components {
             agents?: {
                 [key: string]: components["schemas"]["AgentConfig"];
             };
+            fofa?: components["schemas"]["FofaConfig"];
             lightrag?: components["schemas"]["LightRAGConfig"];
         };
         /** KnowledgeDocumentDetailSchema */
@@ -3965,7 +4051,7 @@ export interface components {
          * ToolResultTypeSchema
          * @enum {string}
          */
-        ToolResultTypeSchema: "skill_detail" | "work_project" | "report";
+        ToolResultTypeSchema: "skill_detail" | "work_project" | "report" | "fofa";
         /** TurnBoundaryEvent */
         TurnBoundaryEvent: {
             /**
@@ -4046,6 +4132,7 @@ export interface components {
             agents: {
                 [key: string]: components["schemas"]["UpdateAgentConfigRequest"];
             };
+            fofa: components["schemas"]["FofaConfig"];
             lightrag: components["schemas"]["LightRAGConfig"];
         };
         /** UpdateInstanceConfigResponse */

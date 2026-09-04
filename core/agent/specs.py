@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from agents import Tool
 
 from core.agent.constants import DEFAULT_AGENT_CODE, SPECIALIST_AGENT_CODES
+from core.tools.fofa import fofa_search
 from core.tools.reports import export_report
 from core.tools.work_project import (
     activate_work_project_work_item,
@@ -46,6 +47,7 @@ class ToolMount:
     tool: Tool
     requires_sandbox_container: bool = False
     requires_work_project: bool = False
+    requires_fofa_config: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +110,10 @@ SPECIALIST_TOOLS = (
     *WORK_PROJECT_RECORD_TOOLS,
 )
 
+FOFA_TOOLS = (
+    ToolMount(fofa_search, requires_fofa_config=True),
+)
+
 AGENT_SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
         code=DEFAULT_AGENT_CODE,
@@ -121,5 +127,11 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
         ),
         subagents=tuple(SubagentMount(code=code) for code in SPECIALIST_AGENT_CODES),
     ),
-    *(AgentSpec(code=code, tools=SPECIALIST_TOOLS) for code in SPECIALIST_AGENT_CODES),
+    *(
+        AgentSpec(
+            code=code,
+            tools=(*SPECIALIST_TOOLS, *FOFA_TOOLS) if code == "cie" else SPECIALIST_TOOLS,
+        )
+        for code in SPECIALIST_AGENT_CODES
+    ),
 )

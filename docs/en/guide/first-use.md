@@ -29,7 +29,7 @@ The system contains the following core modules:
 6. Sandbox Images: manages customized sandbox images, including the default image with sandbox-local skills and preloaded security tooling.
 7. Sandbox Containers: orchestrates runnable sandbox containers with command execution, files, noVNC/browser review, and egress configuration.
 8. System Users: manages system users, roles, and related identity information.
-9. System Config: manages Agent runtime, Agent models, and independent LightRAG embedding and extraction configuration.
+9. System Config: manages Agent runtime, Agent models, independent LightRAG embedding and extraction configuration, and the optional FOFA asset-search integration.
 
 ## Start Working
 

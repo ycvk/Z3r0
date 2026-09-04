@@ -112,6 +112,15 @@ class LightRAGConfig(StrictConfigModel):
     chunk_matches: int = Field(default=10, ge=1, le=50)
 
 
+# FOFA asset search API config
+class FofaConfig(StrictConfigModel):
+    """Configuration for the optional FOFA asset-search integration."""
+
+    enabled: bool = Field(default=False)
+    base_url: str = Field(default="https://fofa.info", min_length=1)
+    api_key: str = Field(default="", max_length=256)
+
+
 # global config
 class GlobalConfig(StrictConfigModel):
     system: SystemConfig = Field(default_factory=SystemConfig)
@@ -120,6 +129,7 @@ class GlobalConfig(StrictConfigModel):
     agent_pool: AgentPoolConfig = Field(default_factory=AgentPoolConfig)
     agent_runtime: AgentRuntimeConfig = Field(default_factory=AgentRuntimeConfig)
     lightrag: LightRAGConfig = Field(default_factory=LightRAGConfig)
+    fofa: FofaConfig = Field(default_factory=FofaConfig)
 
     @model_validator(mode="after")
     def validate_agent_codes(self) -> Self:

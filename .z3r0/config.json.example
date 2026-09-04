@@ -52,6 +52,11 @@
         "graph_matches": 5,
         "chunk_matches": 10
     },
+    "fofa": {
+        "enabled": false,
+        "base_url": "https://fofa.info",
+        "api_key": ""
+    },
     "agents": {
         "cso": {
             "code": "cso",

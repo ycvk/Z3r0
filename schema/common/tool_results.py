@@ -12,6 +12,7 @@ class ToolResultTypeSchema(StrEnum):
     SKILL_DETAIL = "skill_detail"
     WORK_PROJECT = "work_project"
     REPORT = "report"
+    FOFA = "fofa"
 
 
 class ToolResultSchema(BaseModel):

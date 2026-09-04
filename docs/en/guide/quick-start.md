@@ -68,10 +68,21 @@ Edit the system runtime configuration in `.z3r0/config.json`, mainly updating th
 | `lightrag.llm_*` | Independent OpenAI-compatible LLM API, key, and model used for entity and relationship extraction. |
 | `lightrag.graph_matches` | Number of entity and relationship matches included in graph retrieval context. |
 | `lightrag.chunk_matches` | Number of original document chunks included in text retrieval context. |
+| `fofa.enabled` | Enables the `fofa_search` function tool. It is mounted only when this is `true` and both FOFA connection fields are populated. |
+| `fofa.base_url` | FOFA API base URL, normally `https://fofa.info`. |
+| `fofa.api_key` | FOFA API key. Keep this value private and rotate it according to your operational policy. |
 
 LightRAG uses `lightrag.llm_*` for entity and relationship extraction. These settings are configured independently from each Agent model in `agents.*`. Both bundled Compose files pull `ghcr.io/yv1ing/postgres-for-rag:latest` and `ghcr.io/yv1ing/pgadmin4:latest` from GitHub Container Registry. The PostgreSQL image includes the pgvector and Apache AGE extensions required by LightRAG storage.
 
 The embedding API, model, and dimension define the knowledge collection's vector representation and should be selected before the first document import. Moving an existing collection to a different embedding model or dimension requires removing its indexed documents and importing them again. Embedding credentials, extraction LLM settings, and graph and document retrieval breadth can otherwise be managed independently through `System Config`.
+
+When FOFA is enabled, the asset-search tool accepts the regular FOFA query language. Common
+expressions include `domain="example.com"`, `ip="203.0.113.10"`, `port="443"`,
+`protocol="https"`, `title=="login"`, and `org="Example Org"`. Combine clauses with `&&`
+(AND), `||` (OR), or `!` (NOT); `=` is used for exact matches and `==` for contains-style
+matches where supported. Time filters such as `after="2024-01-01"` and `before="2024-12-31"`
+can narrow results. Each request returns at most 300 results. Use FOFA only for assets within
+the authorized assessment scope.
 
 ### Start Containers
 
