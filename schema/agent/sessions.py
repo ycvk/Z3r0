@@ -13,6 +13,7 @@ from schema.common.responses import PaginatedResponse
 class SessionType(StrEnum):
     CHAT = "chat"
     PROJECT = "project"
+    FLOW = "flow"
 
 
 # agent session summary composed from SDK sessions + session metadata

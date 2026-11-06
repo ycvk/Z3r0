@@ -114,6 +114,23 @@ async def resolve_obligation_in_session(
     return notification
 
 
+async def merge_payload_by_run_id(run_id: str, extra: dict[str, Any]) -> None:
+    if not run_id or not extra:
+        return
+    async with get_async_session() as session:
+        notification = (await session.exec(
+            select(AgentNotification).where(AgentNotification.run_id == run_id)
+        )).first()
+        if notification is None:
+            return
+        payload = dict(notification.payload or {})
+        payload.update(extra)
+        notification.payload = payload
+        notification.updated_at = datetime.now()
+        session.add(notification)
+        await session.commit()
+
+
 async def enqueue_user_message_notification(
     *,
     session_id: str,

@@ -8,6 +8,7 @@ import {
   Server,
   Settings,
   Users,
+  Waypoints,
   type LucideIcon,
 } from "lucide-react";
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
@@ -45,6 +46,16 @@ export const adminRoutes: readonly AdminRoute[] = [
     { path: DEFAULT_ADMIN_PATH, label: "Playground", eyebrow: "Agent Workbench", icon: MessageSquareCode, adminOnly: false, navigation: true },
     () => import("../features/playground/PlaygroundPage"),
     "PlaygroundPage",
+  ),
+  defineRoute(
+    { path: "/flows", label: "Flows", eyebrow: "Autonomous Runs", icon: Waypoints, adminOnly: false, navigation: true },
+    () => import("../features/flows/FlowsPage"),
+    "FlowsPage",
+  ),
+  defineRoute(
+    { path: "/flows/:flowId", label: "Flows", eyebrow: "Autonomous Runs", icon: Waypoints, adminOnly: false, navigation: false },
+    () => import("../features/flows/FlowWorkspacePage"),
+    "FlowWorkspacePage",
   ),
   defineRoute(
     { path: "/work-projects", label: "Work Projects", eyebrow: "Project Operations", icon: FolderKanban, adminOnly: true, navigation: true },

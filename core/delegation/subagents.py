@@ -879,6 +879,7 @@ def _subagent_context(
         sandbox_skill_metadata=context.sandbox_skill_metadata,
         work_project_id=context.work_project_id,
         work_item_id=snapshot.work_item_id,
+        flow_bound=context.flow_bound,
     )
 
 

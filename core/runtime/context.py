@@ -30,6 +30,7 @@ class AgentRuntimeContext:
     sandbox_skill_metadata: tuple[str, ...] = ()
     work_project_id: int | None = None
     work_item_id: int | None = None
+    flow_bound: bool = False
 
 
 def main_agent_instance_id(session_id: str, user_id: int, agent_code: str) -> str:

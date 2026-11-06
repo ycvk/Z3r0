@@ -32,6 +32,7 @@ from model.work_project.graph import (
     WorkProjectRelation,
 )
 from model.work_project.projects import WorkProject, WorkProjectOwner
+from model.flow.flows import Flow, FlowSubtask
 from model.work_project.workflow import (
     WorkProjectWorkItem,
     WorkProjectWorkItemDependency,
@@ -52,6 +53,7 @@ _registered_models = [
     WorkProjectEvidence, WorkProjectRelationEvidence, WorkProjectFindingEvidence, WorkProjectAttackPathStepEvidence,
     AgentSessionMeta, AgentMessageMeta, AgentContextCompaction,
     AgentSubordinateTask, AgentNotification, SandboxAsyncJob, AgentEventLog,
+    Flow, FlowSubtask,
 ]
 _registered_sdk_tables = [agent_sessions, agent_messages]
 

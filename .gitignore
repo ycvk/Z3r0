@@ -27,3 +27,5 @@ web/dist-landing
 .lightrag
 .postgres-data
 .pgadmin-data
+
+.idea

@@ -83,6 +83,19 @@ def report_session_id(report_path: Path) -> str:
     return relative.parts[0] if len(relative.parts) == 2 else ""
 
 
+def latest_report_id_for_session(session_id: str) -> str | None:
+    session_dir = _safe_session_report_dir(session_id)
+    if not session_dir.is_dir():
+        return None
+    files = sorted(session_dir.glob(f"*{REPORT_EXTENSION}"), key=lambda path: path.stat().st_mtime, reverse=True)
+    if not files:
+        return None
+    try:
+        return report_id_for_path(files[0])
+    except ValueError:
+        return None
+
+
 def report_download_filename(report_path: Path) -> str:
     session_id = report_session_id(report_path)
     if not session_id:

@@ -1,3 +1,65 @@
+.flow-workspace {
+  display: grid;
+  gap: 18px;
+  min-height: 0;
+  color: var(--z-text);
+}
+
+.flow-workspace-header,
+.flow-workspace-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.flow-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(240px, 0.8fr);
+  gap: 18px;
+  min-height: 0;
+}
+
+.flow-workspace-goal,
+.flow-workspace-transcript pre,
+.flow-workspace-event pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.flow-workspace-transcript,
+.flow-workspace-side,
+.flow-workspace-main {
+  min-height: 0;
+}
+
+.flow-workspace-transcript {
+  display: grid;
+  gap: 12px;
+}
+
+.flow-workspace-event span {
+  color: var(--z-text-muted);
+  font-size: 12px;
+}
+
+.flow-workspace-subtasks {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+}
+
+.flow-workspace-error,
+.flow-workspace-meta {
+  color: var(--z-text-muted);
+}
+
+.resource-link-button {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+
 .resource-page,
 .system-config-page,
 .knowledges-page,

@@ -10,7 +10,7 @@ from logger import get_logger
 from middleware.system_user import AuthUser
 from model.agent.sessions import AgentSessionMeta
 from schema.agent.events import AgentEventSchema, AgentInputPart
-from schema.agent.sessions import AgentSessionSummarySchema
+from schema.agent.sessions import AgentSessionSummarySchema, SessionType
 from service.agent import sessions as agent_sessions
 from service.agent import notifications as agent_notifications
 from service.agent.session_state import get_session_meta, has_outstanding_session_work
@@ -290,6 +290,7 @@ async def build_runtime_context(
         sandbox_container_generation=selected_container_generation,
         sandbox_skill_metadata=sandbox_skill_metadata,
         work_project_id=work_project_id,
+        flow_bound=meta is not None and meta.session_type == SessionType.FLOW,
     )
 
 

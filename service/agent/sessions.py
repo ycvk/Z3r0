@@ -34,7 +34,15 @@ _SESSION_TEARDOWN_BATCH_SIZE = 32
 _content_event_adapter: TypeAdapter[AgentContentEventSchema] = TypeAdapter(AgentContentEventSchema)
 
 
-async def create_session(user_id: int) -> str:
+async def create_session(
+    user_id: int,
+    *,
+    session_type: SessionType = SessionType.CHAT,
+    title: str = "",
+    project_id: int | None = None,
+    sandbox_container_id: int | None = None,
+    sandbox_container_generation: int = 0,
+) -> str:
     session_id = str(uuid4())
     async with get_async_session() as session:
         await lock_system_user_lifecycle(session, user_id)
@@ -43,9 +51,13 @@ async def create_session(user_id: int) -> str:
         await ensure_sdk_session_row(session, session_id)
         session.add(AgentSessionMeta(
             session_id=session_id,
-            session_type=SessionType.CHAT,
+            session_type=session_type,
+            title=title,
             agent_code=DEFAULT_AGENT_CODE,
             owner_id=user_id,
+            project_id=project_id,
+            selected_sandbox_container_id=sandbox_container_id,
+            selected_sandbox_container_generation=sandbox_container_generation,
         ))
         await session.commit()
     return session_id
@@ -137,6 +149,7 @@ async def _list_sessions(
         agent_sessions.c.updated_at.desc(),
         agent_sessions.c.session_id.desc(),
     )
+    stmt = stmt.where(meta_table.c.session_type != SessionType.FLOW)
     if project_id is None:
         stmt = stmt.where(
             meta_table.c.project_id.is_(None),
@@ -433,6 +446,8 @@ async def _can_access_meta(
     user_id: int,
     user_role: SystemUserRole,
 ) -> bool:
+    if meta.session_type == SessionType.FLOW and user_role == SystemUserRole.ADMIN:
+        return True
     if meta.project_id is None:
         return meta.owner_id == user_id
     if await session.get(WorkProject, meta.project_id) is None:

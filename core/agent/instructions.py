@@ -85,6 +85,7 @@ def build_instructions(
     include_work_project_tools: bool,
     include_delegation_tools: bool,
     include_report_tools: bool,
+    flow_addendum: str = "",
 ) -> str:
     runtime_guidance = [CORE_INSTRUCTIONS]
     if include_delegation_tools:
@@ -106,6 +107,8 @@ def build_instructions(
     ]
     if include_sandbox_skills and has_sandbox_container:
         stable_parts.append(_build_sandbox_skill_instructions(sandbox_skill_metadata))
+    if flow_addendum.strip():
+        stable_parts.append(flow_addendum.strip())
     return "\n\n".join(part.strip() for part in stable_parts if part.strip())
 
 
