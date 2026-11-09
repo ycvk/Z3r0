@@ -29,7 +29,7 @@ editLink: true
 6. Sandbox Images：管理针对不同需求定制的 sandbox 镜像，包括带有 sandbox 内 skills 和预装安全工具链的默认镜像。
 7. Sandbox Containers：编排实际运行的 sandbox 容器，承载命令执行、文件、noVNC/浏览器复核和 egress 配置。
 8. System Users：系统用户管理模块，可配置用户信息、角色等。
-9. System Config：管理 Agent 运行时、Agent model，以及独立的 LightRAG embedding 与关系抽取配置。
+9. System Config：管理 Agent 运行时、Agent model、独立的 LightRAG embedding 与关系抽取配置，以及可选的 FOFA 资产检索集成。
 
 ## 开始工作
 

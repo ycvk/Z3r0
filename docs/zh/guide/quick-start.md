@@ -68,11 +68,15 @@ cp .z3r0/config.json.example .z3r0/config.json
 | `lightrag.llm_*` | 用于实体与关系抽取的独立 OpenAI 兼容 LLM API、key 和 model。 |
 | `lightrag.graph_matches` | 图谱检索上下文包含的实体与关系匹配数量。 |
 | `lightrag.chunk_matches` | 文本检索上下文包含的原始文档分块数量。 |
+| `fofa.enabled` | 启用 `fofa_search` 工具。仅当该项为 `true` 且 FOFA 连接字段已填写时挂载。 |
+| `fofa.base_url` | FOFA API 基础地址，通常为 `https://fofa.info`。 |
+| `fofa.api_key` | FOFA API 密钥。请妥善保管并按安全策略定期轮换。 |
 
 LightRAG 使用 `lightrag.llm_*` 完成实体与关系抽取，该配置与 `agents.*` 中的 Agent model 独立。项目提供的两份 Compose 文件均从 GitHub Container Registry 拉取 `ghcr.io/yv1ing/postgres-for-rag:latest` 和 `ghcr.io/yv1ing/pgadmin4:latest`；PostgreSQL 镜像包含 LightRAG 存储所需的 pgvector 与 Apache AGE 扩展。
 
 Embedding API、model 和维度共同定义知识集合的向量表示方式，应在首次导入文档前完成选择。已有知识集合如需更换 embedding model 或维度，需要先移除已索引文档，再重新导入。Embedding 凭据、关系抽取 LLM 配置，以及图谱与文档检索范围可通过 `System Config` 分别管理。
 
+启用 FOFA 后，资产检索工具支持标准 FOFA 查询语法。常见表达式包括 `domain="example.com"`、`ip="203.0.113.10"`、`port="443"`、`protocol="https"`、`title=="login"` 和 `org="Example Org"`。可使用 `&&`（与）、`||`（或）、`!`（非）组合条件；`=` 用于精确匹配，`==` 用于支持包含匹配的字段，也可结合 `after="2024-01-01"`、`before="2024-12-31"` 等时间范围过滤。单次请求最多返回 300 条结果，请仅在授权评估范围内使用 FOFA。
 ### 启动容器
 
 一切准备就绪后，使用以下命令一键启动 Z3r0：

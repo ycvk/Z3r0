@@ -100,7 +100,7 @@ Z3r0 将系统划分为四个架构平面：
 
 | 平面 | 范围 |
 | --- | --- |
-| 控制平面 | 用户、系统配置、Agent、会话、WorkProject、Knowledges、托管主机、sandbox 镜像、sandbox 容器和 egress proxy。 |
+| 控制平面 | 用户、系统配置、Agent、会话、WorkProject、Knowledges、托管主机、sandbox 镜像、sandbox 容器、egress proxy 以及可选的 FOFA 资产检索集成。 |
 | 运行时平面 | 多 Agent 会话执行、任务输入的 LightRAG 检索、实时事件流、长周期任务连续性、历史投影和时间线回放。 |
 | 证据平面 | 授权范围、资产关系、图谱目标 WorkItem、不可变证据、漏洞发现、攻击路径、目标覆盖和工作流决策。 |
 | 执行平面 | Docker 主机、sandbox 容器、Shell/文件/noVNC 访问、命令执行、sandbox 内 skills、内置安全工具集和 egress 策略。 |

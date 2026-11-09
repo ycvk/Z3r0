@@ -1,4 +1,4 @@
-import { TextArea } from "@douyinfe/semi-ui";
+import { TextArea } from "../../shared/ui/semi";
 import { Waypoints } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SANDBOX_CONTAINER_STATUS } from "../../shared/api/generated/constants";

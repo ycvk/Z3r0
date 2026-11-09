@@ -1,4 +1,4 @@
-import { Button, Tag, TextArea } from "@douyinfe/semi-ui";
+import { Button, Tag, TextArea } from "../../shared/ui/semi";
 import { ArrowLeft, Download, SquareStop, Waypoints } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";

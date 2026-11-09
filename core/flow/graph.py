@@ -1,5 +1,6 @@
 from core.agent.constants import DEFAULT_AGENT_CODE
 from core.agent.specs import (
+    FOFA_TOOLS,
     WORK_PROJECT_GOVERNANCE_TOOLS,
     WORK_PROJECT_RECORD_TOOLS,
     WORK_PROJECT_TOOLS,
@@ -51,6 +52,7 @@ def flow_mounts_for_spec(spec: AgentSpec) -> tuple[ToolMount, ...]:
             ToolMount(complete_current_work_project, requires_work_project=True),
             *FLOW_SANDBOX_TOOLS,
             *FLOW_CONTROL_TOOLS,
+            *FOFA_TOOLS,
         )
     remaining = tuple(
         mount for mount in spec.tools
