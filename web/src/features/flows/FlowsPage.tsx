@@ -47,6 +47,7 @@ export function FlowsPage() {
       || flow.status === FLOW_STATUS.REPORTING
     )).length,
     completed: flows.items.filter((flow) => flow.status === FLOW_STATUS.COMPLETED).length,
+    tokens: flows.items.reduce((sum, flow) => sum + (flow.total_tokens ?? 0), 0),
   }), [flows.items]);
 
   const columns: ResourceColumn<FlowSummary>[] = [
@@ -71,6 +72,10 @@ export function FlowsPage() {
       render: (flow) => flow.project_id ?? "—",
     },
     {
+      key: "tokens", header: "Tokens", width: "130px",
+      render: (flow) => `${(flow.total_tokens ?? 0).toLocaleString()} (${flow.llm_requests ?? 0} req)`,
+    },
+    {
       key: "updated", header: "Updated", width: "minmax(0, 0.8fr)",
       render: (flow) => formatDateTime(flow.updated_at),
     },
@@ -84,6 +89,7 @@ export function FlowsPage() {
         metrics={[
           { label: "In flight", value: summary.active },
           { label: "Completed", value: summary.completed },
+          { label: "Tokens (page)", value: summary.tokens.toLocaleString() },
           { label: "Total", value: flows.total },
         ]}
         empty={flows.loaded && flows.items.length === 0}

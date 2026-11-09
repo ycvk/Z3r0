@@ -5,16 +5,20 @@ from fastapi.responses import FileResponse
 from handler.common.http import raise_api_error
 from middleware.system_user import AuthUser
 from schema.common.responses import CommonResponse
+from schema.agent.credentials import CreateSessionCredentialRequest
+from schema.common.responses import CommonResponse
 from schema.flow.flows import CreateFlowRequest, FlowInputRequest, ListFlowsResponse
 from service.agent import reports as agent_reports
 from service.common.pagination import paginated_payload
 from service.flow.records import (
     FlowValidationError,
+    add_flow_credential,
     answer_flow_input,
     cancel_flow,
     create_flow,
     get_flow,
     list_flows,
+    remove_flow_credential,
 )
 
 
@@ -71,3 +75,31 @@ async def download_flow_report_handler(public_id: str, user: AuthUser) -> FileRe
     except ValueError:
         raise_api_error(HTTPStatus.NOT_FOUND, "report not found")
     return FileResponse(path, filename=agent_reports.report_download_filename(path), media_type="text/markdown")
+
+
+async def add_flow_credential_handler(
+    public_id: str,
+    request: CreateSessionCredentialRequest,
+    user: AuthUser,
+) -> CommonResponse:
+    try:
+        flow = await add_flow_credential(public_id, request, user)
+    except (FlowValidationError, ValueError) as exc:
+        raise_api_error(HTTPStatus.BAD_REQUEST, str(exc))
+    if flow is None:
+        raise_api_error(HTTPStatus.NOT_FOUND, "flow not found")
+    return CommonResponse(message="credential saved", data=flow)
+
+
+async def remove_flow_credential_handler(
+    public_id: str,
+    credential_id: int,
+    user: AuthUser,
+) -> CommonResponse:
+    try:
+        flow = await remove_flow_credential(public_id, credential_id, user)
+    except FlowValidationError as exc:
+        raise_api_error(HTTPStatus.NOT_FOUND, str(exc))
+    if flow is None:
+        raise_api_error(HTTPStatus.NOT_FOUND, "flow not found")
+    return CommonResponse(message="credential removed", data=flow)

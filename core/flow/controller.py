@@ -7,6 +7,7 @@ from core.agent.constants import DEFAULT_AGENT_CODE
 from core.flow.barriers import pop_barrier
 from core.flow.prompts import PLANNING_PROMPT, REFINE_PROMPT, REPORT_PROMPT, SUBTASK_PROMPT
 from core.runtime.session import get_agent_pool
+from core.sandbox.command_guard import approve_session_guard, is_guard_approval_reply
 from logger import get_logger
 from middleware.system_user import AuthUser
 from schema.agent.events import AgentTextInputPart
@@ -112,6 +113,8 @@ async def _run_flow(public_id: str) -> None:
                 answer = await _wait_for_input(public_id)
                 if answer is None:
                     return
+                if is_guard_approval_reply(answer):
+                    approve_session_guard(flow_schema.session_id)
                 await flow_records.update_flow_status(public_id, FlowStatus.RUNNING, ask_question=None)
                 if not await _run_subtask(
                     public_id,

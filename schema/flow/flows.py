@@ -4,6 +4,7 @@ from enum import StrEnum
 from pydantic import BaseModel, Field, field_validator
 
 from schema.common.responses import PaginatedResponse
+from schema.agent.credentials import CreateSessionCredentialRequest, SessionCredentialSchema
 
 
 class FlowStatus(StrEnum):
@@ -62,6 +63,12 @@ class FlowSchema(BaseModel):
     report_id: str | None = None
     error: str = ""
     subtasks: list[FlowSubtaskSchema] = Field(default_factory=list)
+    credentials: list[SessionCredentialSchema] = Field(default_factory=list)
+    llm_requests: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_tokens: int = 0
+    total_tokens: int = 0
     created_at: datetime
     updated_at: datetime
     started_at: datetime | None = None
@@ -75,6 +82,11 @@ class FlowSummarySchema(BaseModel):
     status: FlowStatus
     sandbox_container_id: int
     project_id: int | None = None
+    llm_requests: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_tokens: int = 0
+    total_tokens: int = 0
     created_at: datetime
     updated_at: datetime
     started_at: datetime | None = None

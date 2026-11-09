@@ -1,5 +1,7 @@
 from datetime import datetime
+from typing import Any
 
+from sqlalchemy import update
 from sqlmodel import select
 
 from database import get_async_session
@@ -102,6 +104,33 @@ async def has_outstanding_session_work(session_id: str) -> bool:
 async def get_session_meta(session_id: str) -> AgentSessionMeta | None:
     async with get_async_session() as session:
         return await session.get(AgentSessionMeta, session_id)
+
+
+async def record_session_usage(session_id: str, usage: Any) -> None:
+    """Atomically accumulate LLM request and token counters onto AgentSessionMeta."""
+    if not session_id or usage is None:
+        return
+    requests = max(int(getattr(usage, "requests", 0) or 0), 0)
+    input_tokens = max(int(getattr(usage, "input_tokens", 0) or 0), 0)
+    output_tokens = max(int(getattr(usage, "output_tokens", 0) or 0), 0)
+    details = getattr(usage, "input_tokens_details", None)
+    cached_tokens = max(int(getattr(details, "cached_tokens", 0) or 0), 0)
+    total_tokens = max(int(getattr(usage, "total_tokens", 0) or 0), input_tokens + output_tokens)
+    if not (requests or input_tokens or output_tokens or total_tokens):
+        return
+    async with get_async_session() as session:
+        await session.execute(
+            update(AgentSessionMeta)
+            .where(AgentSessionMeta.session_id == session_id)
+            .values(
+                llm_requests=AgentSessionMeta.llm_requests + requests,
+                input_tokens=AgentSessionMeta.input_tokens + input_tokens,
+                output_tokens=AgentSessionMeta.output_tokens + output_tokens,
+                cached_tokens=AgentSessionMeta.cached_tokens + cached_tokens,
+                total_tokens=AgentSessionMeta.total_tokens + total_tokens,
+            )
+        )
+        await session.commit()
 
 
 def _truncate_error(value: str) -> str:

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from core.flow.barriers import FlowBarrier, set_barrier
 from core.runtime.context import AgentRuntimeContext
 from core.sandbox import command_output
+from core.sandbox.command_guard import check_command_guard, strip_guard_prefix
 from core.sandbox.command_jobs import start_async_sandbox_command
 from core.work_project import validate_specialist_execution_context
 from schema.flow.flows import MAX_FLOW_SUBTASKS
@@ -74,8 +75,18 @@ async def terminal(
         return _error_result("No sandbox container selected.")
     if error := await validate_specialist_execution_context(ctx.context):
         return _error_result(error)
-    if not command.strip():
+    command_text = command.strip()
+    if not command_text:
         return _error_result("sandbox container command is required")
+    if reason := check_command_guard(command_text, session_id=ctx.context.session_id):
+        question = (
+            f"[Command Guard] High-risk command intercepted ({reason}):\n"
+            f"`{command_text}`\n"
+            "Reply ALLOW to permit execution in this session, or provide alternative instructions."
+        )
+        set_barrier(ctx.context.session_id, FlowBarrier(kind="ask", payload={"question": question}))
+        return _json_ok(barrier="ask", intercepted=True, reason=reason)
+    command_text = strip_guard_prefix(command_text).strip()
     if not ctx.context.agent_instance_id:
         return _error_result("agent instance id is required for async command execution")
 
@@ -91,7 +102,6 @@ async def terminal(
     timeout = _clamp_timeout(timeout_seconds)
     run_id = command_output.new_run_id()
     output_path = command_output.output_path_for_run(run_id)
-    command_text = command.strip()
     await start_async_sandbox_command(
         run_id=run_id,
         context=replace(ctx.context, rag_context="", work_project_context=""),

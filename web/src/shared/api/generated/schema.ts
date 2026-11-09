@@ -296,6 +296,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/flows/{public_id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Flow Credential Route */
+        post: operations["add_flow_credential_route_api_flows__public_id__credentials_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/flows/{public_id}/credentials/{credential_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Flow Credential Route */
+        delete: operations["remove_flow_credential_route_api_flows__public_id__credentials__credential_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/flows/{public_id}/input": {
         parameters: {
             query?: never;
@@ -951,6 +985,58 @@ export interface paths {
         patch: operations["update_system_user_handler_api_system_users__id__patch"];
         trace?: never;
     };
+    "/api/traffic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Traffic Route */
+        get: operations["list_traffic_route_api_traffic_get"];
+        put?: never;
+        post?: never;
+        /** Clear Traffic Route */
+        delete: operations["clear_traffic_route_api_traffic_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/traffic/ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingest Traffic Route */
+        post: operations["ingest_traffic_route_api_traffic_ingest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/traffic/{traffic_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Traffic Entry Route */
+        get: operations["get_traffic_entry_route_api_traffic__traffic_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/work-projects": {
         parameters: {
             query?: never;
@@ -1379,20 +1465,40 @@ export interface components {
              */
             agent_code: string;
             /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
+            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Input Tokens
+             * @default 0
+             */
+            input_tokens: number;
             /**
              * Is Running
              * @default false
              */
             is_running: boolean;
             /**
+             * Llm Requests
+             * @default 0
+             */
+            llm_requests: number;
+            /**
              * Message Count
              * @default 0
              */
             message_count: number;
+            /**
+             * Output Tokens
+             * @default 0
+             */
+            output_tokens: number;
             /**
              * Owner Id
              * @default 0
@@ -1437,6 +1543,11 @@ export interface components {
              * @default
              */
             title: string;
+            /**
+             * Total Tokens
+             * @default 0
+             */
+            total_tokens: number;
             /**
              * Updated At
              * Format: date-time
@@ -1555,6 +1666,11 @@ export interface components {
             /** Files */
             files: string[];
         };
+        /** ClearTrafficResponse */
+        ClearTrafficResponse: {
+            /** Deleted */
+            deleted: number;
+        };
         /** CommonResponse */
         CommonResponse: {
             /**
@@ -1607,6 +1723,20 @@ export interface components {
             code: number;
             /** Data */
             data?: unknown;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
+        /** CommonResponse[ClearTrafficResponse] */
+        CommonResponse_ClearTrafficResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["ClearTrafficResponse"] | null;
             /**
              * Message
              * @default success
@@ -1781,6 +1911,20 @@ export interface components {
              */
             message: string;
         };
+        /** CommonResponse[IngestTrafficResponse] */
+        CommonResponse_IngestTrafficResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["IngestTrafficResponse"] | null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
         /** CommonResponse[InstanceConfigSchema] */
         CommonResponse_InstanceConfigSchema_: {
             /**
@@ -1915,6 +2059,20 @@ export interface components {
              */
             code: number;
             data?: components["schemas"]["ListManagedHostImagesResponse"] | null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
+        /** CommonResponse[ListTrafficResponse] */
+        CommonResponse_ListTrafficResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["ListTrafficResponse"] | null;
             /**
              * Message
              * @default success
@@ -2257,6 +2415,20 @@ export interface components {
              */
             message: string;
         };
+        /** CommonResponse[TrafficEntryDetailSchema] */
+        CommonResponse_TrafficEntryDetailSchema_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["TrafficEntryDetailSchema"] | null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
         /** CommonResponse[UpdateInstanceConfigResponse] */
         CommonResponse_UpdateInstanceConfigResponse_: {
             /**
@@ -2506,6 +2678,28 @@ export interface components {
              */
             supports_tor: boolean;
         };
+        /** CreateSessionCredentialRequest */
+        CreateSessionCredentialRequest: {
+            /**
+             * Credential Type
+             * @default password
+             */
+            credential_type: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Secret */
+            secret: string;
+            /** Target */
+            target: string;
+            /**
+             * Username
+             * @default
+             */
+            username: string;
+        };
         /** CreateSystemUserRequest */
         CreateSystemUserRequest: {
             /** Email */
@@ -2697,10 +2891,17 @@ export interface components {
             /** Ask Question */
             ask_question?: string | null;
             /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
+            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Credentials */
+            credentials?: components["schemas"]["SessionCredentialSchema"][];
             /**
              * Error
              * @default
@@ -2712,6 +2913,21 @@ export interface components {
             goal: string;
             /** Id */
             id: number;
+            /**
+             * Input Tokens
+             * @default 0
+             */
+            input_tokens: number;
+            /**
+             * Llm Requests
+             * @default 0
+             */
+            llm_requests: number;
+            /**
+             * Output Tokens
+             * @default 0
+             */
+            output_tokens: number;
             /** Owner Id */
             owner_id: number;
             /** Project Id */
@@ -2731,6 +2947,11 @@ export interface components {
             subtasks?: components["schemas"]["FlowSubtaskSchema"][];
             /** Title */
             title: string;
+            /**
+             * Total Tokens
+             * @default 0
+             */
+            total_tokens: number;
             /**
              * Updated At
              * Format: date-time
@@ -2780,6 +3001,11 @@ export interface components {
         /** FlowSummarySchema */
         FlowSummarySchema: {
             /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
+            /**
              * Created At
              * Format: date-time
              */
@@ -2788,6 +3014,21 @@ export interface components {
             finished_at?: string | null;
             /** Id */
             id: number;
+            /**
+             * Input Tokens
+             * @default 0
+             */
+            input_tokens: number;
+            /**
+             * Llm Requests
+             * @default 0
+             */
+            llm_requests: number;
+            /**
+             * Output Tokens
+             * @default 0
+             */
+            output_tokens: number;
             /** Project Id */
             project_id?: number | null;
             /** Public Id */
@@ -2799,6 +3040,11 @@ export interface components {
             status: components["schemas"]["FlowStatus"];
             /** Title */
             title: string;
+            /**
+             * Total Tokens
+             * @default 0
+             */
+            total_tokens: number;
             /**
              * Updated At
              * Format: date-time
@@ -2889,6 +3135,63 @@ export interface components {
              * @default 0
              */
             total_size: number;
+        };
+        /** IngestTrafficItemRequest */
+        IngestTrafficItemRequest: {
+            /**
+             * Duration Ms
+             * @default 0
+             */
+            duration_ms: number;
+            /**
+             * Method
+             * @default GET
+             */
+            method: string;
+            /**
+             * Request Body
+             * @default
+             */
+            request_body: string;
+            /** Request Headers */
+            request_headers?: {
+                [key: string]: string;
+            };
+            /**
+             * Response Body
+             * @default
+             */
+            response_body: string;
+            /**
+             * Response Bytes
+             * @default 0
+             */
+            response_bytes: number;
+            /** Response Headers */
+            response_headers?: {
+                [key: string]: string;
+            };
+            /**
+             * Status Code
+             * @default 200
+             */
+            status_code: number;
+            /** Url */
+            url: string;
+        };
+        /** IngestTrafficRequest */
+        IngestTrafficRequest: {
+            /** Items */
+            items: components["schemas"]["IngestTrafficItemRequest"][];
+            /** Project Id */
+            project_id?: number | null;
+            /** Sandbox Container Id */
+            sandbox_container_id?: number | null;
+        };
+        /** IngestTrafficResponse */
+        IngestTrafficResponse: {
+            /** Ingested */
+            ingested: number;
         };
         /** InstanceConfigSchema */
         InstanceConfigSchema: {
@@ -3203,6 +3506,17 @@ export interface components {
         ListManagedHostImagesResponse: {
             /** Items */
             items: components["schemas"]["ManagedHostImageSchema"][];
+        };
+        /** ListTrafficResponse */
+        ListTrafficResponse: {
+            /** Items */
+            items: components["schemas"]["TrafficEntrySummarySchema"][];
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+            /** Total */
+            total: number;
         };
         /** ListWorkProjectSessionsResponse */
         ListWorkProjectSessionsResponse: {
@@ -3661,6 +3975,47 @@ export interface components {
              */
             updated_at: string;
         };
+        /** SessionCredentialSchema */
+        SessionCredentialSchema: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Credential Type
+             * @default password
+             */
+            credential_type: string;
+            /** Id */
+            id: number;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Project Id */
+            project_id?: number | null;
+            /** Secret */
+            secret: string;
+            /**
+             * Session Id
+             * @default
+             */
+            session_id: string;
+            /** Target */
+            target: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Username
+             * @default
+             */
+            username: string;
+        };
         /**
          * SessionType
          * @enum {string}
@@ -4051,7 +4406,103 @@ export interface components {
          * ToolResultTypeSchema
          * @enum {string}
          */
-        ToolResultTypeSchema: "skill_detail" | "work_project" | "report" | "fofa";
+        ToolResultTypeSchema: "skill_detail" | "work_project" | "report" | "fofa" | "credential" | "traffic";
+        /** TrafficEntryDetailSchema */
+        TrafficEntryDetailSchema: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Duration Ms
+             * @default 0
+             */
+            duration_ms: number;
+            /** Host */
+            host: string;
+            /** Id */
+            id: number;
+            /** Method */
+            method: string;
+            /** Path */
+            path: string;
+            /** Project Id */
+            project_id?: number | null;
+            /**
+             * Request Body
+             * @default
+             */
+            request_body: string;
+            /** Request Headers */
+            request_headers?: {
+                [key: string]: string;
+            };
+            /**
+             * Response Body
+             * @default
+             */
+            response_body: string;
+            /**
+             * Response Bytes
+             * @default 0
+             */
+            response_bytes: number;
+            /** Response Headers */
+            response_headers?: {
+                [key: string]: string;
+            };
+            /** Sandbox Container Id */
+            sandbox_container_id?: number | null;
+            /**
+             * Source
+             * @default proxy
+             */
+            source: string;
+            /** Status Code */
+            status_code: number;
+            /** Url */
+            url: string;
+        };
+        /** TrafficEntrySummarySchema */
+        TrafficEntrySummarySchema: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Duration Ms
+             * @default 0
+             */
+            duration_ms: number;
+            /** Host */
+            host: string;
+            /** Id */
+            id: number;
+            /** Method */
+            method: string;
+            /** Path */
+            path: string;
+            /** Project Id */
+            project_id?: number | null;
+            /**
+             * Response Bytes
+             * @default 0
+             */
+            response_bytes: number;
+            /** Sandbox Container Id */
+            sandbox_container_id?: number | null;
+            /**
+             * Source
+             * @default proxy
+             */
+            source: string;
+            /** Status Code */
+            status_code: number;
+            /** Url */
+            url: string;
+        };
         /** TurnBoundaryEvent */
         TurnBoundaryEvent: {
             /**
@@ -6053,6 +6504,118 @@ export interface operations {
             header?: never;
             path: {
                 public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_FlowSchema_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Flow not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    add_flow_credential_route_api_flows__public_id__credentials_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSessionCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_FlowSchema_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Flow not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    remove_flow_credential_route_api_flows__public_id__credentials__credential_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+                credential_id: number;
             };
             cookie?: never;
         };
@@ -8998,6 +9561,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommonResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    list_traffic_route_api_traffic_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+                sandbox_container_id?: number | null;
+                project_id?: number | null;
+                query?: string;
+                path?: string;
+                status?: string;
+                method?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_ListTrafficResponse_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    clear_traffic_route_api_traffic_delete: {
+        parameters: {
+            query?: {
+                sandbox_container_id?: number | null;
+                project_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_ClearTrafficResponse_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    ingest_traffic_route_api_traffic_ingest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IngestTrafficRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_IngestTrafficResponse_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    get_traffic_entry_route_api_traffic__traffic_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                traffic_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_TrafficEntryDetailSchema_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Traffic entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
                 };
             };
             /** @description Validation Error */

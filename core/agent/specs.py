@@ -4,6 +4,8 @@ from agents import Tool
 
 from core.agent.constants import DEFAULT_AGENT_CODE, SPECIALIST_AGENT_CODES
 from core.tools.fofa import fofa_search
+from core.tools.credentials import list_credentials, save_credential
+from core.tools.traffic import get_traffic_detail, search_traffic
 from core.tools.reports import export_report
 from core.tools.work_project import (
     activate_work_project_work_item,
@@ -103,9 +105,20 @@ SANDBOX_TOOLS = (
     ToolMount(load_skill, requires_sandbox_container=True),
 )
 
+CREDENTIAL_TOOLS = (
+    ToolMount(save_credential),
+    ToolMount(list_credentials),
+)
+TRAFFIC_TOOLS = (
+    ToolMount(search_traffic),
+    ToolMount(get_traffic_detail),
+)
+
 
 SPECIALIST_TOOLS = (
     *SANDBOX_TOOLS,
+    *CREDENTIAL_TOOLS,
+    *TRAFFIC_TOOLS,
     *WORK_PROJECT_TOOLS,
     *WORK_PROJECT_RECORD_TOOLS,
 )
@@ -118,6 +131,8 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
         code=DEFAULT_AGENT_CODE,
         tools=(
+            *CREDENTIAL_TOOLS,
+            *TRAFFIC_TOOLS,
             *WORK_PROJECT_TOOLS,
             *WORK_PROJECT_GOVERNANCE_TOOLS,
             *WORK_PROJECT_RECORD_TOOLS,

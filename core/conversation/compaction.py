@@ -21,6 +21,7 @@ from core.conversation.formats import (
 )
 from core.conversation.projection import ContextProjection, ProjectedItem, ProjectionCompaction
 from logger import get_logger
+from service.agent.session_state import record_session_usage
 from model.agent.context_compactions import AgentContextCompaction
 
 
@@ -177,7 +178,11 @@ async def compact_if_needed(
     # store, and compaction scope is per-agent-instance with serialized turns,
     # so same-scope concurrency is effectively impossible anyway.
     try:
-        summary_text = await _summarize_items([item.item for item in candidate_items], agent_config)
+        summary_text = await _summarize_items(
+            [item.item for item in candidate_items],
+            agent_config,
+            session_id=scope.session_id,
+        )
     except Exception as exc:
         logger.warning(
             "agent context compaction failed session=%s viewer=%s reason=%s",
@@ -356,7 +361,12 @@ async def _store_compaction(
         raise
 
 
-async def _summarize_items(items: list[TResponseInputItem], agent_config: AgentConfig) -> str:
+async def _summarize_items(
+    items: list[TResponseInputItem],
+    agent_config: AgentConfig,
+    *,
+    session_id: str = "",
+) -> str:
     cfg = get_config().agent_runtime
     agent = Agent(
         name="Context Compressor",
@@ -379,6 +389,10 @@ async def _summarize_items(items: list[TResponseInputItem], agent_config: AgentC
                 f"```json\n{payload}\n```"
             ),
             max_turns=1,
+        )
+        await record_session_usage(
+            session_id,
+            getattr(getattr(result, "context_wrapper", None), "usage", None),
         )
         output = getattr(result, "final_output", "")
         return output if isinstance(output, str) else str(output or "")

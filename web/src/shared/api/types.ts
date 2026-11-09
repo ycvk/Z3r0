@@ -301,3 +301,15 @@ export type FlowPathParams = PathParameters<paths["/api/flows/{public_id}"]["get
 export type CancelFlowResponse = JsonResponse<paths["/api/flows/{public_id}/cancel"]["post"]>;
 export type SubmitFlowInputRequest = JsonRequestBody<paths["/api/flows/{public_id}/input"]["post"]>;
 export type SubmitFlowInputResponse = JsonResponse<paths["/api/flows/{public_id}/input"]["post"]>;
+export type SessionCredential = components["schemas"]["SessionCredentialSchema"];
+export type CreateSessionCredentialRequest = JsonRequestBody<paths["/api/flows/{public_id}/credentials"]["post"]>;
+export type AddFlowCredentialResponse = JsonResponse<paths["/api/flows/{public_id}/credentials"]["post"]>;
+export type RemoveFlowCredentialResponse = JsonResponse<paths["/api/flows/{public_id}/credentials/{credential_id}"]["delete"]>;
+
+export type QueryTrafficParams = QueryParameters<paths["/api/traffic"]["get"]>;
+export type QueryTrafficResponse = JsonResponse<paths["/api/traffic"]["get"]>;
+export type TrafficEntrySummary = NonNullable<QueryTrafficResponse["data"]>["items"][number];
+export type GetTrafficEntryResponse = JsonResponse<paths["/api/traffic/{traffic_id}"]["get"]>;
+export type TrafficEntryDetail = NonNullable<GetTrafficEntryResponse["data"]>;
+export type ClearTrafficParams = QueryParameters<paths["/api/traffic"]["delete"]>;
+export type ClearTrafficResponse = JsonResponse<paths["/api/traffic"]["delete"]>;

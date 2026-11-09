@@ -30,4 +30,9 @@ class AgentSessionMeta(SQLModel, table=True):
     run_started_at: datetime | None = Field(default=None)
     run_finished_at: datetime | None = Field(default=None)
     run_error: str = ""
+    llm_requests: int = Field(default=0, sa_column=Column(BigInteger, nullable=False, default=0))
+    input_tokens: int = Field(default=0, sa_column=Column(BigInteger, nullable=False, default=0))
+    output_tokens: int = Field(default=0, sa_column=Column(BigInteger, nullable=False, default=0))
+    cached_tokens: int = Field(default=0, sa_column=Column(BigInteger, nullable=False, default=0))
+    total_tokens: int = Field(default=0, sa_column=Column(BigInteger, nullable=False, default=0))
     created_at: datetime = Field(default_factory=datetime.now)

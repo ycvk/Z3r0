@@ -1,5 +1,5 @@
 from agents.extensions.memory import SQLAlchemySession
-from sqlalchemy import URL
+from sqlalchemy import URL, text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -15,6 +15,8 @@ from model.agent.message_meta import AgentMessageMeta
 from model.agent.event_log import AgentEventLog
 from model.agent.context_compactions import AgentContextCompaction
 from model.agent.sessions import AgentSessionMeta
+from model.agent.credentials import SessionCredential
+from model.sandbox.traffic import SandboxTrafficEntry
 from model.sandbox.containers import SandboxContainer
 from model.sandbox.images import SandboxImage
 from model.system_user.users import SystemUser
@@ -51,8 +53,8 @@ _registered_models = [
     WorkProjectAttackPath, WorkProjectAttackPathStep,
     WorkProjectWorkItem, WorkProjectWorkItemTarget, WorkProjectWorkItemDependency, WorkProjectWorkLog,
     WorkProjectEvidence, WorkProjectRelationEvidence, WorkProjectFindingEvidence, WorkProjectAttackPathStepEvidence,
-    AgentSessionMeta, AgentMessageMeta, AgentContextCompaction,
-    AgentSubordinateTask, AgentNotification, SandboxAsyncJob, AgentEventLog,
+    AgentSessionMeta, AgentMessageMeta, AgentContextCompaction, SessionCredential,
+    AgentSubordinateTask, AgentNotification, SandboxAsyncJob, SandboxTrafficEntry, AgentEventLog,
     Flow, FlowSubtask,
 ]
 _registered_sdk_tables = [agent_sessions, agent_messages]
@@ -76,6 +78,10 @@ async def create_all_tables() -> None:
 
     async with _engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+        for col_name in ("llm_requests", "input_tokens", "output_tokens", "cached_tokens", "total_tokens"):
+            await conn.execute(
+                text(f"ALTER TABLE agent_session_meta ADD COLUMN IF NOT EXISTS {col_name} BIGINT NOT NULL DEFAULT 0")
+            )
 
     logger.info("all tables created")
 

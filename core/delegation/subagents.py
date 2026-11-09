@@ -38,6 +38,7 @@ from core.sandbox.command_jobs import cancel_agent_async_sandbox_commands
 from core.task_runtime import InterruptSignal, TurnTrigger, iter_interruptible_events, run_until_idle
 from core.work_project import activate_work_project_context
 from database import get_async_session, get_engine
+from service.agent.session_state import record_session_usage
 from logger import get_logger
 from model.work_project.workflow import WorkProjectWorkItem
 from schema.agent.events import (
@@ -716,6 +717,11 @@ def _subagent_run_turn(driver: _SubagentDriver) -> Callable[[TurnTrigger], Any]:
                 except Exception:
                     await discard_partial_stream(stream, buffers, log_label="subagent")
                     raise
+                finally:
+                    await record_session_usage(
+                        snapshot.session_id,
+                        getattr(getattr(stream, "context_wrapper", None), "usage", None),
+                    )
                 return stream
 
     return _run_turn

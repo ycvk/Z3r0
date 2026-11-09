@@ -1,13 +1,21 @@
 import { apiBlob, defineJsonEndpoint } from "./client";
 import { buildQuery } from "./query";
 import type {
+  AddFlowCredentialResponse,
   CancelFlowResponse,
+  ClearTrafficParams,
+  ClearTrafficResponse,
   CreateFlowRequest,
   CreateFlowResponse,
+  CreateSessionCredentialRequest,
   FlowPathParams,
   GetFlowResponse,
+  GetTrafficEntryResponse,
   QueryFlowsParams,
   QueryFlowsResponse,
+  QueryTrafficParams,
+  QueryTrafficResponse,
+  RemoveFlowCredentialResponse,
   SubmitFlowInputRequest,
   SubmitFlowInputResponse,
 } from "./types";
@@ -41,3 +49,25 @@ export const submitFlowInput = defineJsonEndpoint<
 export function downloadFlowReport(publicId: FlowPathParams["public_id"]) {
   return apiBlob(`${FLOWS_PATH}/${encodeURIComponent(publicId)}/report`);
 }
+
+export const addFlowCredential = defineJsonEndpoint<
+  [publicId: FlowPathParams["public_id"], payload: CreateSessionCredentialRequest], AddFlowCredentialResponse
+>("POST", (publicId) => `${FLOWS_PATH}/${encodeURIComponent(publicId)}/credentials`, (_, payload) => payload);
+
+export const removeFlowCredential = defineJsonEndpoint<
+  [publicId: FlowPathParams["public_id"], credentialId: number], RemoveFlowCredentialResponse
+>("DELETE", (publicId, credentialId) => `${FLOWS_PATH}/${encodeURIComponent(publicId)}/credentials/${credentialId}`);
+
+const TRAFFIC_PATH = "/api/traffic";
+
+export const queryTraffic = defineJsonEndpoint<[params: QueryTrafficParams], QueryTrafficResponse>(
+  "GET", (params) => `${TRAFFIC_PATH}${buildQuery(params)}`,
+);
+
+export const getTrafficEntry = defineJsonEndpoint<[trafficId: number], GetTrafficEntryResponse>(
+  "GET", (trafficId) => `${TRAFFIC_PATH}/${trafficId}`,
+);
+
+export const clearTraffic = defineJsonEndpoint<[params: ClearTrafficParams], ClearTrafficResponse>(
+  "DELETE", (params) => `${TRAFFIC_PATH}${buildQuery(params)}`,
+);

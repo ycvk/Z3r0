@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/binary"
@@ -245,6 +246,7 @@ func handleEgressHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	startedAt := time.Now()
 	upstream, useProxyFormat, proxyAuth, err := dialEgressHTTP(target)
 	if err != nil {
 		log.Printf("egress HTTP dial failed target=%s upstream=%s: %v", target.Host, egressState.Config().LogLabel(), err)
@@ -266,13 +268,44 @@ func handleEgressHTTP(w http.ResponseWriter, r *http.Request) {
 	if proxyAuth != "" {
 		req.Header.Set("Proxy-Authorization", proxyAuth)
 	}
+	var reqTap *tapReadCloser
+	if req.Body != nil && !isBinaryContentType(req.Header.Get("Content-Type")) {
+		reqTap = &tapReadCloser{rc: req.Body}
+		req.Body = reqTap
+	}
 
 	if err := writeEgressHTTPRequest(req, upstream, useProxyFormat); err != nil {
 		log.Printf("egress HTTP write failed target=%s: %v", target.Host, err)
 		http.Error(w, "failed to write upstream request", http.StatusBadGateway)
 		return
 	}
-	writeEgressResponse(w, upstream)
+	reqBody := ""
+	if reqTap != nil {
+		reqBody = reqTap.buf.String()
+	}
+	statusCode, respHeader, respBody, respBytes := writeEgressResponse(w, upstream)
+	if statusCode > 0 {
+		path := target.Path
+		if path == "" {
+			path = "/"
+		}
+		if target.RawQuery != "" {
+			path += "?" + target.RawQuery
+		}
+		sandboxTraffic.Record(proxyTrafficEntry{
+			Method:          r.Method,
+			URL:             target.String(),
+			Host:            target.Host,
+			Path:            path,
+			StatusCode:      statusCode,
+			RequestHeaders:  flattenHeader(r.Header),
+			RequestBody:     reqBody,
+			ResponseHeaders: flattenHeader(respHeader),
+			ResponseBody:    respBody,
+			ResponseBytes:   respBytes,
+			DurationMs:      time.Since(startedAt).Milliseconds(),
+		})
+	}
 }
 
 func handleEgressConnect(w http.ResponseWriter, r *http.Request) {
@@ -549,17 +582,40 @@ func socks5Handshake(conn net.Conn, user string, password string, target string)
 	return err
 }
 
-func writeEgressResponse(w http.ResponseWriter, upstream net.Conn) {
+func writeEgressResponse(w http.ResponseWriter, upstream net.Conn) (int, http.Header, string, int64) {
 	resp, err := http.ReadResponse(bufio.NewReader(upstream), nil)
 	if err != nil {
 		http.Error(w, "failed to read upstream response", http.StatusBadGateway)
-		return
+		return 0, nil, "", 0
 	}
 	defer resp.Body.Close()
 
-	copyHeader(w.Header(), cloneHeaderWithoutHopByHop(resp.Header))
+	cleanHeader := cloneHeaderWithoutHopByHop(resp.Header)
+	copyHeader(w.Header(), cleanHeader)
 	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(w, resp.Body)
+	var respBuf bytes.Buffer
+	var dst io.Writer = w
+	if !isBinaryContentType(resp.Header.Get("Content-Type")) {
+		dst = io.MultiWriter(w, &limitedBufferWriter{buf: &respBuf, max: maxTrafficBodyBytes})
+	}
+	n, _ := io.Copy(dst, resp.Body)
+	return resp.StatusCode, cleanHeader, respBuf.String(), n
+}
+
+type limitedBufferWriter struct {
+	buf *bytes.Buffer
+	max int
+}
+
+func (l *limitedBufferWriter) Write(p []byte) (int, error) {
+	if l.buf.Len() < l.max {
+		rem := l.max - l.buf.Len()
+		if len(p) < rem {
+			rem = len(p)
+		}
+		l.buf.Write(p[:rem])
+	}
+	return len(p), nil
 }
 
 func writeEgressHTTPRequest(req *http.Request, conn net.Conn, useProxyFormat bool) error {

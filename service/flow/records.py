@@ -8,7 +8,9 @@ from core.sandbox.command_jobs import cancel_session_async_sandbox_commands
 from database import get_async_session
 from logger import get_logger
 from middleware.system_user import AuthUser
+from model.agent.sessions import AgentSessionMeta
 from model.flow.flows import Flow, FlowSubtask
+from schema.agent.credentials import CreateSessionCredentialRequest, SessionCredentialSchema
 from schema.flow.flows import (
     FLOW_RECOVERABLE_STATUSES,
     FLOW_TERMINAL_STATUSES,
@@ -24,6 +26,7 @@ from schema.sandbox.containers import SandboxContainerStatus
 from schema.system_user.users import SystemUserRole
 from schema.agent.sessions import SessionType
 from service.agent import runtime as agent_runtime
+from service.agent import credentials as agent_credentials
 from service.agent import sessions as agent_sessions
 from service.common.pagination import Page, paginate_statement
 from service.flow.locking import lock_flow_by_public_id
@@ -58,7 +61,13 @@ def _subtask_schema(row: FlowSubtask) -> FlowSubtaskSchema:
     )
 
 
-def to_schema(flow: Flow, subtasks: list[FlowSubtask] | tuple[FlowSubtask, ...] = ()) -> FlowSchema:
+def to_schema(
+    flow: Flow,
+    subtasks: list[FlowSubtask] | tuple[FlowSubtask, ...] = (),
+    *,
+    meta: AgentSessionMeta | None = None,
+    credentials: list[SessionCredentialSchema] | None = None,
+) -> FlowSchema:
     return FlowSchema(
         id=flow.id or 0,
         public_id=flow.public_id,
@@ -76,6 +85,12 @@ def to_schema(flow: Flow, subtasks: list[FlowSubtask] | tuple[FlowSubtask, ...] 
             _subtask_schema(item)
             for item in sorted(subtasks, key=lambda row: (row.position, row.id or 0))
         ],
+        credentials=credentials or [],
+        llm_requests=meta.llm_requests if meta else 0,
+        input_tokens=meta.input_tokens if meta else 0,
+        output_tokens=meta.output_tokens if meta else 0,
+        cached_tokens=meta.cached_tokens if meta else 0,
+        total_tokens=meta.total_tokens if meta else 0,
         created_at=flow.created_at,
         updated_at=flow.updated_at,
         started_at=flow.started_at,
@@ -83,7 +98,7 @@ def to_schema(flow: Flow, subtasks: list[FlowSubtask] | tuple[FlowSubtask, ...] 
     )
 
 
-def to_summary(flow: Flow) -> FlowSummarySchema:
+def to_summary(flow: Flow, *, meta: AgentSessionMeta | None = None) -> FlowSummarySchema:
     return FlowSummarySchema(
         id=flow.id or 0,
         public_id=flow.public_id,
@@ -91,6 +106,11 @@ def to_summary(flow: Flow) -> FlowSummarySchema:
         status=flow.status,
         sandbox_container_id=flow.sandbox_container_id,
         project_id=flow.project_id,
+        llm_requests=meta.llm_requests if meta else 0,
+        input_tokens=meta.input_tokens if meta else 0,
+        output_tokens=meta.output_tokens if meta else 0,
+        cached_tokens=meta.cached_tokens if meta else 0,
+        total_tokens=meta.total_tokens if meta else 0,
         created_at=flow.created_at,
         updated_at=flow.updated_at,
         started_at=flow.started_at,
@@ -112,8 +132,12 @@ async def _load_subtasks(flow_id: int) -> list[FlowSubtask]:
 
 async def _schema_for(flow: Flow) -> FlowSchema:
     subtasks = await _load_subtasks(flow.id or 0) if flow.id else []
-    return to_schema(flow, subtasks)
-
+    meta = await agent_sessions.get_session_meta(flow.session_id)
+    creds = await agent_credentials.list_credentials_for_context(
+        session_id=flow.session_id,
+        project_id=flow.project_id,
+    )
+    return to_schema(flow, subtasks, meta=meta, credentials=creds)
 
 async def create_flow(request: CreateFlowRequest, user: AuthUser) -> FlowSchema:
     record = await load_sandbox_container_record(request.sandbox_container_id)
@@ -178,11 +202,19 @@ async def list_flows(user: AuthUser, page: int, size: int) -> Page[FlowSummarySc
     if user.role != SystemUserRole.ADMIN:
         stmt = stmt.where(Flow.owner_id == user.id)
     page_result = await paginate_statement(stmt, page=page, size=size)
+    metas: dict[str, AgentSessionMeta] = {}
+    if page_result.items:
+        session_ids = [item.session_id for item in page_result.items]
+        async with get_async_session() as session:
+            rows = (await session.exec(
+                select(AgentSessionMeta).where(col(AgentSessionMeta.session_id).in_(session_ids))
+            )).all()
+            metas = {row.session_id: row for row in rows}
     return Page(
         page=page_result.page,
         size=page_result.size,
         total=page_result.total,
-        items=[to_summary(item) for item in page_result.items],
+        items=[to_summary(item, meta=metas.get(item.session_id)) for item in page_result.items],
     )
 
 
@@ -230,6 +262,45 @@ async def answer_flow_input(public_id: str, user: AuthUser, text: str) -> FlowSc
     from core.flow.controller import submit_flow_input
     await submit_flow_input(public_id, text)
     return await get_flow(public_id, user)
+
+
+async def add_flow_credential(
+    public_id: str,
+    request: CreateSessionCredentialRequest,
+    user: AuthUser,
+) -> FlowSchema | None:
+    flow = await load_flow_row(public_id)
+    if flow is None or not _can_access_flow(flow, user):
+        return None
+    await agent_credentials.upsert_credential(
+        owner_id=user.id,
+        session_id=flow.session_id,
+        project_id=flow.project_id,
+        target=request.target,
+        credential_type=request.credential_type,
+        username=request.username,
+        secret=request.secret,
+        note=request.note,
+    )
+    return await _schema_for(flow)
+
+
+async def remove_flow_credential(
+    public_id: str,
+    credential_id: int,
+    user: AuthUser,
+) -> FlowSchema | None:
+    flow = await load_flow_row(public_id)
+    if flow is None or not _can_access_flow(flow, user):
+        return None
+    deleted = await agent_credentials.delete_credential(
+        credential_id,
+        session_id=flow.session_id,
+        project_id=flow.project_id,
+    )
+    if not deleted:
+        raise FlowValidationError("credential not found")
+    return await _schema_for(flow)
 
 
 async def load_flow_row(public_id: str) -> Flow | None:

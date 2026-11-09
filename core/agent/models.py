@@ -53,13 +53,23 @@ def build_model_retry_settings() -> ModelRetrySettings:
     )
 
 
+def _normalize_base_url(base_url: str) -> str | None:
+    # ponytail: auto-append /v1 for bare Ollama (:11434) URLs so local keyless setups work out of the box
+    cleaned = (base_url or "").strip().rstrip("/")
+    if not cleaned:
+        return None
+    if cleaned.endswith(":11434"):
+        return f"{cleaned}/v1"
+    return cleaned
+
+
 class Z3r0OpenAIModel(Model):
     def __init__(self, cfg: AgentConfig) -> None:
         self.model = cfg.model
         self._input_adapter = ModelInputAdapter()
         self._client = AsyncOpenAI(
             api_key=cfg.api_key or ("unused" if cfg.base_url else None),
-            base_url=cfg.base_url or None,
+            base_url=_normalize_base_url(cfg.base_url),
             timeout=httpx.Timeout(
                 connect=_MODEL_CONNECT_TIMEOUT_SECONDS,
                 read=DEFAULT_TIMEOUT.read,

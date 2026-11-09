@@ -326,19 +326,39 @@
             "title": "Agent Code",
             "type": "string"
           },
+          "cached_tokens": {
+            "default": 0,
+            "title": "Cached Tokens",
+            "type": "integer"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "input_tokens": {
+            "default": 0,
+            "title": "Input Tokens",
+            "type": "integer"
           },
           "is_running": {
             "default": false,
             "title": "Is Running",
             "type": "boolean"
           },
+          "llm_requests": {
+            "default": 0,
+            "title": "Llm Requests",
+            "type": "integer"
+          },
           "message_count": {
             "default": 0,
             "title": "Message Count",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "default": 0,
+            "title": "Output Tokens",
             "type": "integer"
           },
           "owner_id": {
@@ -435,6 +455,11 @@
             "default": "",
             "title": "Title",
             "type": "string"
+          },
+          "total_tokens": {
+            "default": 0,
+            "title": "Total Tokens",
+            "type": "integer"
           },
           "updated_at": {
             "format": "date-time",
@@ -768,6 +793,20 @@
         "title": "Body_upload_knowledge_documents_route_api_knowledges_documents_post",
         "type": "object"
       },
+      "ClearTrafficResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "ClearTrafficResponse",
+        "type": "object"
+      },
       "CommonResponse": {
         "properties": {
           "code": {
@@ -862,6 +901,32 @@
           }
         },
         "title": "CommonResponse[Any]",
+        "type": "object"
+      },
+      "CommonResponse_ClearTrafficResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClearTrafficResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[ClearTrafficResponse]",
         "type": "object"
       },
       "CommonResponse_ContainerFileReadResponse_": {
@@ -1176,6 +1241,32 @@
         "title": "CommonResponse[FlowSchema]",
         "type": "object"
       },
+      "CommonResponse_IngestTrafficResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IngestTrafficResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[IngestTrafficResponse]",
+        "type": "object"
+      },
       "CommonResponse_InstanceConfigSchema_": {
         "properties": {
           "code": {
@@ -1434,6 +1525,32 @@
           }
         },
         "title": "CommonResponse[ListManagedHostImagesResponse]",
+        "type": "object"
+      },
+      "CommonResponse_ListTrafficResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ListTrafficResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[ListTrafficResponse]",
         "type": "object"
       },
       "CommonResponse_ListWorkProjectSessionsResponse_": {
@@ -2060,6 +2177,32 @@
         "title": "CommonResponse[TestEgressProxyResponse]",
         "type": "object"
       },
+      "CommonResponse_TrafficEntryDetailSchema_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrafficEntryDetailSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[TrafficEntryDetailSchema]",
+        "type": "object"
+      },
       "CommonResponse_UpdateInstanceConfigResponse_": {
         "properties": {
           "code": {
@@ -2635,6 +2778,48 @@
         "title": "CreateSandboxImageRequest",
         "type": "object"
       },
+      "CreateSessionCredentialRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "credential_type": {
+            "default": "password",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Credential Type",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          },
+          "secret": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Secret",
+            "type": "string"
+          },
+          "target": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Target",
+            "type": "string"
+          },
+          "username": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "secret"
+        ],
+        "title": "CreateSessionCredentialRequest",
+        "type": "object"
+      },
       "CreateSystemUserRequest": {
         "properties": {
           "email": {
@@ -3024,10 +3209,22 @@
             ],
             "title": "Ask Question"
           },
+          "cached_tokens": {
+            "default": 0,
+            "title": "Cached Tokens",
+            "type": "integer"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/SessionCredentialSchema"
+            },
+            "title": "Credentials",
+            "type": "array"
           },
           "error": {
             "default": "",
@@ -3052,6 +3249,21 @@
           },
           "id": {
             "title": "Id",
+            "type": "integer"
+          },
+          "input_tokens": {
+            "default": 0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "llm_requests": {
+            "default": 0,
+            "title": "Llm Requests",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "default": 0,
+            "title": "Output Tokens",
             "type": "integer"
           },
           "owner_id": {
@@ -3117,6 +3329,11 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "total_tokens": {
+            "default": 0,
+            "title": "Total Tokens",
+            "type": "integer"
           },
           "updated_at": {
             "format": "date-time",
@@ -3215,6 +3432,11 @@
       },
       "FlowSummarySchema": {
         "properties": {
+          "cached_tokens": {
+            "default": 0,
+            "title": "Cached Tokens",
+            "type": "integer"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -3234,6 +3456,21 @@
           },
           "id": {
             "title": "Id",
+            "type": "integer"
+          },
+          "input_tokens": {
+            "default": 0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "llm_requests": {
+            "default": 0,
+            "title": "Llm Requests",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "default": 0,
+            "title": "Output Tokens",
             "type": "integer"
           },
           "project_id": {
@@ -3273,6 +3510,11 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "total_tokens": {
+            "default": 0,
+            "title": "Total Tokens",
+            "type": "integer"
           },
           "updated_at": {
             "format": "date-time",
@@ -3390,6 +3632,131 @@
           }
         },
         "title": "FofaSearchResultSchema",
+        "type": "object"
+      },
+      "IngestTrafficItemRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "duration_ms": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "method": {
+            "default": "GET",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Method",
+            "type": "string"
+          },
+          "request_body": {
+            "default": "",
+            "maxLength": 262144,
+            "title": "Request Body",
+            "type": "string"
+          },
+          "request_headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Request Headers",
+            "type": "object"
+          },
+          "response_body": {
+            "default": "",
+            "maxLength": 262144,
+            "title": "Response Body",
+            "type": "string"
+          },
+          "response_bytes": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Response Bytes",
+            "type": "integer"
+          },
+          "response_headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Response Headers",
+            "type": "object"
+          },
+          "status_code": {
+            "default": 200,
+            "maximum": 999.0,
+            "minimum": 0.0,
+            "title": "Status Code",
+            "type": "integer"
+          },
+          "url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "IngestTrafficItemRequest",
+        "type": "object"
+      },
+      "IngestTrafficRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IngestTrafficItemRequest"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "sandbox_container_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sandbox Container Id"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "IngestTrafficRequest",
+        "type": "object"
+      },
+      "IngestTrafficResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ingested": {
+            "title": "Ingested",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ingested"
+        ],
+        "title": "IngestTrafficResponse",
         "type": "object"
       },
       "InstanceConfigSchema": {
@@ -4181,6 +4548,37 @@
           "items"
         ],
         "title": "ListManagedHostImagesResponse",
+        "type": "object"
+      },
+      "ListTrafficResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficEntrySummarySchema"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page",
+          "size",
+          "total",
+          "items"
+        ],
+        "title": "ListTrafficResponse",
         "type": "object"
       },
       "ListWorkProjectSessionsResponse": {
@@ -5305,6 +5703,73 @@
         "title": "SandboxImageSchema",
         "type": "object"
       },
+      "SessionCredentialSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "credential_type": {
+            "default": "password",
+            "title": "Credential Type",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "secret": {
+            "title": "Secret",
+            "type": "string"
+          },
+          "session_id": {
+            "default": "",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "username": {
+            "default": "",
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target",
+          "secret",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SessionCredentialSchema",
+        "type": "object"
+      },
       "SessionType": {
         "enum": [
           "chat",
@@ -5883,10 +6348,200 @@
           "skill_detail",
           "work_project",
           "report",
-          "fofa"
+          "fofa",
+          "credential",
+          "traffic"
         ],
         "title": "ToolResultTypeSchema",
         "type": "string"
+      },
+      "TrafficEntryDetailSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "default": 0,
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "request_body": {
+            "default": "",
+            "title": "Request Body",
+            "type": "string"
+          },
+          "request_headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Request Headers",
+            "type": "object"
+          },
+          "response_body": {
+            "default": "",
+            "title": "Response Body",
+            "type": "string"
+          },
+          "response_bytes": {
+            "default": 0,
+            "title": "Response Bytes",
+            "type": "integer"
+          },
+          "response_headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Response Headers",
+            "type": "object"
+          },
+          "sandbox_container_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sandbox Container Id"
+          },
+          "source": {
+            "default": "proxy",
+            "title": "Source",
+            "type": "string"
+          },
+          "status_code": {
+            "title": "Status Code",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "url",
+          "host",
+          "path",
+          "status_code",
+          "created_at"
+        ],
+        "title": "TrafficEntryDetailSchema",
+        "type": "object"
+      },
+      "TrafficEntrySummarySchema": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "default": 0,
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "response_bytes": {
+            "default": 0,
+            "title": "Response Bytes",
+            "type": "integer"
+          },
+          "sandbox_container_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sandbox Container Id"
+          },
+          "source": {
+            "default": "proxy",
+            "title": "Source",
+            "type": "string"
+          },
+          "status_code": {
+            "title": "Status Code",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "url",
+          "host",
+          "path",
+          "status_code",
+          "created_at"
+        ],
+        "title": "TrafficEntrySummarySchema",
+        "type": "object"
       },
       "TurnBoundaryEvent": {
         "properties": {
@@ -9723,6 +10378,174 @@
           }
         ],
         "summary": "Cancel Flow Route",
+        "tags": [
+          "flows"
+        ]
+      }
+    },
+    "/api/flows/{public_id}/credentials": {
+      "post": {
+        "operationId": "add_flow_credential_route_api_flows__public_id__credentials_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_FlowSchema_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Flow not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "Add Flow Credential Route",
+        "tags": [
+          "flows"
+        ]
+      }
+    },
+    "/api/flows/{public_id}/credentials/{credential_id}": {
+      "delete": {
+        "operationId": "remove_flow_credential_route_api_flows__public_id__credentials__credential_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Public Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Credential Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_FlowSchema_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Flow not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "Remove Flow Credential Route",
         "tags": [
           "flows"
         ]
@@ -13869,6 +14692,369 @@
         "summary": "Update System User Handler",
         "tags": [
           "system-users"
+        ]
+      }
+    },
+    "/api/traffic": {
+      "delete": {
+        "operationId": "clear_traffic_route_api_traffic_delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "sandbox_container_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sandbox Container Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_ClearTrafficResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "Clear Traffic Route",
+        "tags": [
+          "traffic"
+        ]
+      },
+      "get": {
+        "operationId": "list_traffic_route_api_traffic_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sandbox_container_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sandbox Container Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 256,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 256,
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 16,
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 16,
+              "title": "Method",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_ListTrafficResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "List Traffic Route",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/traffic/ingest": {
+      "post": {
+        "operationId": "ingest_traffic_route_api_traffic_ingest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestTrafficRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_IngestTrafficResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "Ingest Traffic Route",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/traffic/{traffic_id}": {
+      "get": {
+        "operationId": "get_traffic_entry_route_api_traffic__traffic_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "traffic_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Traffic Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_TrafficEntryDetailSchema_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Traffic entry not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "Get Traffic Entry Route",
+        "tags": [
+          "traffic"
         ]
       }
     },

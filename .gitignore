@@ -29,3 +29,4 @@ web/dist-landing
 .pgadmin-data
 
 .idea
+sandbox/proxy/sandbox-proxy

@@ -1,6 +1,8 @@
 from core.agent.constants import DEFAULT_AGENT_CODE
 from core.agent.specs import (
+    CREDENTIAL_TOOLS,
     FOFA_TOOLS,
+    TRAFFIC_TOOLS,
     WORK_PROJECT_GOVERNANCE_TOOLS,
     WORK_PROJECT_RECORD_TOOLS,
     WORK_PROJECT_TOOLS,
@@ -45,6 +47,8 @@ _CHAT_COMMAND_TOOLS = (execute_sync_command, execute_async_command)
 def flow_mounts_for_spec(spec: AgentSpec) -> tuple[ToolMount, ...]:
     if spec.code == DEFAULT_AGENT_CODE:
         return (
+            *CREDENTIAL_TOOLS,
+            *TRAFFIC_TOOLS,
             *WORK_PROJECT_TOOLS,
             *WORK_PROJECT_GOVERNANCE_TOOLS,
             *WORK_PROJECT_RECORD_TOOLS,

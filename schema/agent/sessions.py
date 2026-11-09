@@ -34,6 +34,11 @@ class AgentSessionSummarySchema(BaseModel):
     run_finished_at: datetime | None = None
     run_error: str = ""
     message_count: int = 0
+    llm_requests: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_tokens: int = 0
+    total_tokens: int = 0
     created_at: datetime
     updated_at: datetime
 

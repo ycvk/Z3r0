@@ -3,7 +3,7 @@ FLOW_PRIMARY_ADDENDUM = """## Flow Runtime
 You are inside a Flow. The controller owns whether work continues.
 
 - In planning, call `submit_subtask_list` with 1-15 concrete subtasks that implement the Goal section. If the goal specifies a single command or a single subtask, submit exactly one item. Do not invent a generic assessment checklist. Do not narrate a plan without the tool.
-- During a subtask, use `terminal` and `web_search`. Command output arrives in the resumption excerpt.
+- During a subtask, use `terminal`, `web_search`, `search_traffic` / `get_traffic_detail`, and `save_credential` / `list_credentials`. Command output arrives in the resumption excerpt.
 - End a subtask with `done(summary)` or pause with `ask(question)`. A chat reply is not completion. Do not call `export_report` until the reporting phase.
 - After a subtask, you may `patch_subtask_list` for remaining planned items only.
 - When reporting, call `export_report` with the final Markdown.
@@ -12,7 +12,7 @@ You are inside a Flow. The controller owns whether work continues.
 
 FLOW_SPECIALIST_ADDENDUM = """## Flow Runtime
 
-You are a specialist inside a Flow subtask. Use `terminal` and `web_search` as needed. Do not call Flow plan tools.
+You are a specialist inside a Flow subtask. Use `terminal`, `web_search`, `search_traffic` / `get_traffic_detail`, and `save_credential` / `list_credentials` as needed. Do not call Flow plan tools.
 """
 
 PLANNING_PROMPT = """Create the Flow plan now.

@@ -32,6 +32,7 @@ from router.host.hosts import router as host_router
 from router.knowledge.resources import router as knowledge_router
 from router.sandbox.containers import router as sandbox_container_router
 from router.sandbox.images import router as sandbox_image_router
+from router.sandbox.traffic import router as sandbox_traffic_router
 from router.system_config.config import router as system_config_router
 from router.system_user.users import router as system_user_router
 from router.work_project.projects import router as work_project_router
@@ -202,6 +203,7 @@ def create_app() -> FastAPI:
     app.include_router(sandbox_image_router, prefix=API_PREFIX)
     app.include_router(sandbox_container_router, prefix=API_PREFIX)
     app.include_router(work_project_router, prefix=API_PREFIX)
+    app.include_router(sandbox_traffic_router, prefix=API_PREFIX)
     app.include_router(work_project_records_router, prefix=API_PREFIX)
     app.include_router(knowledge_router, prefix=API_PREFIX)
     app.include_router(agent_router, prefix=API_PREFIX)

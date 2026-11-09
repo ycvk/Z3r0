@@ -13,6 +13,8 @@ class ToolResultTypeSchema(StrEnum):
     WORK_PROJECT = "work_project"
     REPORT = "report"
     FOFA = "fofa"
+    CREDENTIAL = "credential"
+    TRAFFIC = "traffic"
 
 
 class ToolResultSchema(BaseModel):

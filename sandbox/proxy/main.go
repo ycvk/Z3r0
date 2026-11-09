@@ -73,6 +73,7 @@ func newServerMux(token string, passthroughProxy http.Handler, noVNCProxy http.H
 	mux.HandleFunc("/files/delete", withAuthFunc(token, handleDeleteFiles))
 	mux.HandleFunc("/files/mkdir", withAuthFunc(token, handleMkdir))
 	mux.HandleFunc("/egress", withAuthFunc(token, handleEgress))
+	mux.HandleFunc("/traffic", withAuthFunc(token, handleTraffic))
 	mux.Handle(noVNCPathPrefix+"/", noVNCProxy)
 	mux.HandleFunc(noVNCPathPrefix, withAuthFunc(token, func(w http.ResponseWriter, r *http.Request) {
 		target := noVNCPathPrefix + "/"

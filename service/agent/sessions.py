@@ -237,6 +237,11 @@ def _summary_from_row(row, meta: AgentSessionMeta | None) -> AgentSessionSummary
         run_finished_at=meta.run_finished_at if meta else None,
         run_error=meta.run_error if meta else "",
         message_count=row.message_count or 0,
+        llm_requests=meta.llm_requests if meta else 0,
+        input_tokens=meta.input_tokens if meta else 0,
+        output_tokens=meta.output_tokens if meta else 0,
+        cached_tokens=meta.cached_tokens if meta else 0,
+        total_tokens=meta.total_tokens if meta else 0,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

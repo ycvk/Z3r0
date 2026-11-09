@@ -47,10 +47,13 @@ async def _end_turn_after_async_dispatch(
         if not is_terminal_dispatch_tool(getattr(result.tool, "name", None)):
             continue
         try:
-            status = json.loads(result.output).get("status")
+            payload = json.loads(result.output)
+            status = payload.get("status")
+            barrier = payload.get("barrier")
         except (TypeError, ValueError):
             status = None
-        if status == SandboxAsyncJobStatus.RUNNING.value:
+            barrier = None
+        if status == SandboxAsyncJobStatus.RUNNING.value or barrier == "ask":
             return ToolsToFinalOutputResult(is_final_output=True, final_output=result.output)
     return ToolsToFinalOutputResult(is_final_output=False)
 

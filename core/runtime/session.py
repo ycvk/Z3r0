@@ -50,6 +50,7 @@ from service.agent.session_state import (
     mark_session_running as _mark_session_running,
     mark_session_stopped as _mark_session_stopped,
     mark_sessions_stopped as _mark_sessions_stopped,
+    record_session_usage as _record_session_usage,
 )
 
 
@@ -439,6 +440,11 @@ class AgentSession:
             await discard_partial_stream(stream, buffers, log_label="agent")
             logger.exception("agent stream failed session=%s: %s", self.session_id, exc)
             stream_error = ErrorEvent(created_at=datetime.now(), agent_name=agent.name, message=str(exc))
+        finally:
+            await _record_session_usage(
+                self.session_id,
+                getattr(getattr(stream, "context_wrapper", None), "usage", None),
+            )
         if stream_error is not None:
             await self._publish(tag(stream_error))
         await self._publish(tag(DoneEvent(created_at=datetime.now(), agent_name=agent.name)))

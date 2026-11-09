@@ -2,16 +2,19 @@ from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import FileResponse
 
 from handler.flow.flows import (
+    add_flow_credential_handler,
     cancel_flow_handler,
     create_flow_handler,
     download_flow_report_handler,
     get_flow_handler,
     list_flows_handler,
+    remove_flow_credential_handler,
     submit_flow_input_handler,
 )
 from middleware.system_user import AuthUser, require_user
 from router.common.responses import BAD_REQUEST_RESPONSE, COMMON_ERROR_RESPONSES, not_found_response
 from schema.common.responses import CommonResponse
+from schema.agent.credentials import CreateSessionCredentialRequest
 from schema.flow.flows import (
     CreateFlowRequest,
     FlowInputRequest,
@@ -74,6 +77,22 @@ async def download_flow_report_route(
     return await download_flow_report_handler(public_id=public_id, user=user)
 
 
+
+async def add_flow_credential_route(
+    request: CreateSessionCredentialRequest,
+    public_id: str = Path(..., min_length=1, max_length=64),
+    user: AuthUser = Depends(require_user),
+) -> CommonResponse[FlowSchema]:
+    return await add_flow_credential_handler(public_id=public_id, request=request, user=user)
+
+
+async def remove_flow_credential_route(
+    public_id: str = Path(..., min_length=1, max_length=64),
+    credential_id: int = Path(..., gt=0),
+    user: AuthUser = Depends(require_user),
+) -> CommonResponse[FlowSchema]:
+    return await remove_flow_credential_handler(public_id=public_id, credential_id=credential_id, user=user)
+
 router.add_api_route(
     "",
     create_flow_route,
@@ -113,5 +132,19 @@ router.add_api_route(
     "/{public_id}/report",
     download_flow_report_route,
     methods=["GET"],
+    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE},
+)
+router.add_api_route(
+    "/{public_id}/credentials",
+    add_flow_credential_route,
+    methods=["POST"],
+    response_model=CommonResponse[FlowSchema],
+    responses={**COMMON_ERROR_RESPONSES, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
+)
+router.add_api_route(
+    "/{public_id}/credentials/{credential_id}",
+    remove_flow_credential_route,
+    methods=["DELETE"],
+    response_model=CommonResponse[FlowSchema],
     responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE},
 )
