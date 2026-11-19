@@ -83,21 +83,21 @@ router.add_api_route(
     list_traffic_route,
     methods=["GET"],
     response_model=CommonResponse[ListTrafficResponse],
-    responses=COMMON_ERROR_RESPONSES,
+    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE},
 )
 router.add_api_route(
     "/ingest",
     ingest_traffic_route,
     methods=["POST"],
     response_model=CommonResponse[IngestTrafficResponse],
-    responses={**COMMON_ERROR_RESPONSES, **BAD_REQUEST_RESPONSE},
+    responses={**COMMON_ERROR_RESPONSES, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
 )
 router.add_api_route(
     "",
     clear_traffic_route,
     methods=["DELETE"],
     response_model=CommonResponse[ClearTrafficResponse],
-    responses=COMMON_ERROR_RESPONSES,
+    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE},
 )
 router.add_api_route(
     "/{traffic_id}",

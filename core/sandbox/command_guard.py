@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import re
 
 
@@ -23,34 +24,64 @@ _DESTRUCTIVE_SHELL_RE = re.compile(
     r"|\b(?:mkfs(?:\.[a-z0-9]+)?|shutdown|reboot|poweroff|halt)\b"
     r"|:\(\)\s*\{\s*:\|:\s*&\s*\}\s*;)",
 )
-_ALLOW_PREFIX_RE = re.compile(r"^\s*ALLOW_GUARD=1\s+")
-_APPROVAL_REPLIES = frozenset({"allow", "approve", "approved", "yes", "y", "允许", "放行", "同意"})
+_APPROVAL_REPLIES = frozenset({
+    "allow",
+    "approve",
+    "approved",
+    "yes",
+    "y",
+    "允许",
+    "放行",
+    "同意",
+    "确认放行",
+})
 
-# ponytail: in-memory per-session approval set; cleared when process restarts
-_approved_sessions: set[str] = set()
+# In-memory per-session state: exact intercepted command awaiting operator reply,
+# and one-shot grants for exact commands approved by the operator.
+_pending_commands: dict[str, str] = {}
+_approved_commands: dict[str, Counter[str]] = {}
 
 
-def approve_session_guard(session_id: str) -> None:
-    if session_id:
-        _approved_sessions.add(session_id)
+def normalize_guarded_command(command: str) -> str:
+    return (command or "").strip()
 
 
 def is_guard_approval_reply(text: str) -> bool:
-    cleaned = (text or "").strip().lower()
-    return cleaned in _APPROVAL_REPLIES or cleaned.startswith("allow ") or cleaned.startswith("允许") or cleaned.startswith("放行")
+    return (text or "").strip().lower() in _APPROVAL_REPLIES
 
 
-def strip_guard_prefix(command: str) -> str:
-    return _ALLOW_PREFIX_RE.sub("", command, count=1)
+def has_pending_command(session_id: str) -> bool:
+    return bool(session_id and session_id in _pending_commands)
 
 
-def check_command_guard(command: str, *, session_id: str = "") -> str | None:
-    """Return an interception reason if *command* matches a destructive rule, else None."""
-    text = (command or "").strip()
-    if not text:
-        return None
-    if _ALLOW_PREFIX_RE.match(text) or (session_id and session_id in _approved_sessions):
-        return None
+def approve_pending_command(session_id: str) -> bool:
+    if not session_id:
+        return False
+    pending = _pending_commands.pop(session_id, None)
+    if not pending:
+        return False
+    grants = _approved_commands.setdefault(session_id, Counter())
+    grants[pending] += 1
+    return True
+
+
+def clear_pending_command(session_id: str) -> None:
+    if session_id:
+        _pending_commands.pop(session_id, None)
+
+
+def clear_session_guard(session_id: str) -> None:
+    if session_id:
+        _pending_commands.pop(session_id, None)
+        _approved_commands.pop(session_id, None)
+
+
+def reset_guard_state() -> None:
+    _pending_commands.clear()
+    _approved_commands.clear()
+
+
+def _match_destructive_rule(text: str) -> str | None:
     if _DESTRUCTIVE_SHELL_RE.search(text):
         return "destructive system/root shell command"
     if _DESTRUCTIVE_SQL_RE.search(text):
@@ -62,16 +93,37 @@ def check_command_guard(command: str, *, session_id: str = "") -> str | None:
     return None
 
 
+def check_command_guard(command: str, *, session_id: str = "") -> str | None:
+    """Return an interception reason if *command* matches a destructive rule and has no one-shot operator grant."""
+    text = normalize_guarded_command(command)
+    if not text:
+        return None
+    reason = _match_destructive_rule(text)
+    if reason is None:
+        return None
+    if session_id:
+        grants = _approved_commands.get(session_id)
+        if grants and grants[text] > 0:
+            grants[text] -= 1
+            if grants[text] <= 0:
+                del grants[text]
+            if not grants:
+                _approved_commands.pop(session_id, None)
+            return None
+        _pending_commands[session_id] = text
+    return reason
+
+
 if __name__ == "__main__":
+    reset_guard_state()
     assert check_command_guard("curl -s http://target/api/users") is None
     assert check_command_guard("curl -s http://target/api/delivery/status") is None
     assert check_command_guard("curl -s http://target/api/details?id=1") is None
-    assert check_command_guard("curl -X DELETE http://target/api/users/1") is not None
-    assert check_command_guard("curl 'http://target/api/user/delete?id=1'") is not None
-    assert check_command_guard("curl http://target/admin/destroy") is not None
-    assert check_command_guard("psql -c 'DROP TABLE users;'") is not None
-    assert check_command_guard("rm -rf /") is not None
-    assert check_command_guard("ALLOW_GUARD=1 curl -X DELETE http://target/api/users/1") is None
-    approve_session_guard("sess-test")
-    assert check_command_guard("curl -X DELETE http://target/api/users/1", session_id="sess-test") is None
+    assert check_command_guard("curl -X DELETE http://target/api/users/1", session_id="sess-test") is not None
+    assert check_command_guard("ALLOW_GUARD=1 curl -X DELETE http://target/api/users/1", session_id="sess-test") is not None
+    assert check_command_guard("curl 'http://target/api/user/delete?id=1'", session_id="sess-test") is not None
+    assert approve_pending_command("sess-test") is True
+    assert check_command_guard("psql -c 'DROP TABLE users;'", session_id="sess-test") is not None
+    assert check_command_guard("curl 'http://target/api/user/delete?id=1'", session_id="sess-test") is None
+    assert check_command_guard("curl 'http://target/api/user/delete?id=1'", session_id="sess-test") is not None
     print("command_guard self-check OK")

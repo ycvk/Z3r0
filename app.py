@@ -54,6 +54,10 @@ from service.sandbox.status import (
     start_sandbox_container_status_monitor,
     stop_sandbox_container_status_monitor,
 )
+from service.sandbox.traffic import (
+    start_sandbox_traffic_sync_runtime,
+    stop_sandbox_traffic_sync_runtime,
+)
 from service.system_user.users import create_system_user, query_system_user_by_username
 
 
@@ -173,6 +177,8 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
             await recover_pending_sessions()
             await start_sandbox_container_status_monitor()
             shutdown_steps.append(("sandbox status monitor", stop_sandbox_container_status_monitor))
+            await start_sandbox_traffic_sync_runtime()
+            shutdown_steps.append(("sandbox traffic sync runtime", stop_sandbox_traffic_sync_runtime))
         except Exception:
             logger.exception("lifespan startup failed")
             raise

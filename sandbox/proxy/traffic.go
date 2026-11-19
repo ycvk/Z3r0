@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 )
 
 const (
-	maxTrafficEntries   = 500
+	maxTrafficEntries   = 2000
 	maxTrafficBodyBytes = 64 * 1024
 )
 
@@ -121,6 +122,23 @@ func isBinaryContentType(contentType string) bool {
 	}
 }
 
+func decodeCapturedBody(raw []byte, contentEncoding string) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	if strings.EqualFold(strings.TrimSpace(contentEncoding), "gzip") {
+		gr, err := gzip.NewReader(bytes.NewReader(raw))
+		if err == nil {
+			defer gr.Close()
+			decoded, _ := io.ReadAll(io.LimitReader(gr, maxTrafficBodyBytes))
+			if len(decoded) > 0 {
+				return string(decoded)
+			}
+		}
+	}
+	return string(raw)
+}
+
 type tapReadCloser struct {
 	rc  io.ReadCloser
 	buf bytes.Buffer
@@ -140,4 +158,30 @@ func (t *tapReadCloser) Read(p []byte) (int, error) {
 
 func (t *tapReadCloser) Close() error {
 	return t.rc.Close()
+}
+
+type countingTapReadCloser struct {
+	rc         io.ReadCloser
+	capture    bool
+	buf        bytes.Buffer
+	totalBytes int64
+}
+
+func (c *countingTapReadCloser) Read(p []byte) (int, error) {
+	n, err := c.rc.Read(p)
+	if n > 0 {
+		c.totalBytes += int64(n)
+		if c.capture && c.buf.Len() < maxTrafficBodyBytes {
+			rem := maxTrafficBodyBytes - c.buf.Len()
+			if n < rem {
+				rem = n
+			}
+			c.buf.Write(p[:rem])
+		}
+	}
+	return n, err
+}
+
+func (c *countingTapReadCloser) Close() error {
+	return c.rc.Close()
 }

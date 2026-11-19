@@ -168,6 +168,10 @@ ENV HOME=/root \
     UV_TOOL_BIN_DIR=/usr/local/bin \
     UV_PYTHON_DOWNLOADS=never \
     CHROME_BIN=/usr/local/bin/google-chrome \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    NODE_EXTRA_CA_CERTS=/etc/sandbox-proxy/ca.crt \
     PATH=/opt/jadx/bin:/opt/ghidra:/opt/ghidra/support:/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH
 
 WORKDIR /root
@@ -225,6 +229,7 @@ RUN set -eux; \
       libgtk-3-0t64 \
       libnspr4 \
       libnss3 \
+      libnss3-tools \
       libpango-1.0-0 \
       libx11-6 \
       libxcb1 \

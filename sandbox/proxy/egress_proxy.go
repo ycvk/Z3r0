@@ -23,6 +23,7 @@ import (
 
 const (
 	defaultEgressProxyAddr = "127.0.0.1:8118"
+	egressProxyAddrEnvName = "SANDBOX_EGRESS_PROXY_ADDR"
 	defaultTorSocksAddr    = "127.0.0.1:9050"
 	egressProfilePath      = "/etc/profile.d/sandbox-egress.sh"
 	egressUpstreamTypeKey  = "SANDBOX_EGRESS_UPSTREAM_TYPE"
@@ -43,6 +44,9 @@ var egressAppEnvKeys = []string{
 	"all_proxy",
 	"NO_PROXY",
 	"no_proxy",
+	"SSL_CERT_FILE",
+	"REQUESTS_CA_BUNDLE",
+	"CURL_CA_BUNDLE",
 }
 
 type egressRequest struct {
@@ -224,8 +228,12 @@ func shellQuote(value string) string {
 }
 
 func newEgressProxyServer() *http.Server {
+	addr := strings.TrimSpace(os.Getenv(egressProxyAddrEnvName))
+	if addr == "" {
+		addr = defaultEgressProxyAddr
+	}
 	return &http.Server{
-		Addr:              defaultEgressProxyAddr,
+		Addr:              addr,
 		Handler:           http.HandlerFunc(handleEgressProxyRequest),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -281,7 +289,7 @@ func handleEgressHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	reqBody := ""
 	if reqTap != nil {
-		reqBody = reqTap.buf.String()
+		reqBody = decodeCapturedBody(reqTap.buf.Bytes(), req.Header.Get("Content-Encoding"))
 	}
 	statusCode, respHeader, respBody, respBytes := writeEgressResponse(w, upstream)
 	if statusCode > 0 {
@@ -326,14 +334,18 @@ func handleEgressConnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "hijack unsupported", http.StatusInternalServerError)
 		return
 	}
-	client, _, err := hijacker.Hijack()
+	client, rw, err := hijacker.Hijack()
 	if err != nil {
 		return
 	}
 	defer client.Close()
 
 	_, _ = client.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
-	relay(client, upstream)
+	var clientBuf *bufio.Reader
+	if rw != nil {
+		clientBuf = rw.Reader
+	}
+	serveConnectTunnel(client, clientBuf, upstream, r.Host, mitmCA)
 }
 
 func dialEgressHTTP(target *url.URL) (net.Conn, bool, string, error) {
@@ -595,11 +607,16 @@ func writeEgressResponse(w http.ResponseWriter, upstream net.Conn) (int, http.He
 	w.WriteHeader(resp.StatusCode)
 	var respBuf bytes.Buffer
 	var dst io.Writer = w
-	if !isBinaryContentType(resp.Header.Get("Content-Type")) {
+	captureText := !isBinaryContentType(resp.Header.Get("Content-Type"))
+	if captureText {
 		dst = io.MultiWriter(w, &limitedBufferWriter{buf: &respBuf, max: maxTrafficBodyBytes})
 	}
 	n, _ := io.Copy(dst, resp.Body)
-	return resp.StatusCode, cleanHeader, respBuf.String(), n
+	bodyText := ""
+	if captureText {
+		bodyText = decodeCapturedBody(respBuf.Bytes(), resp.Header.Get("Content-Encoding"))
+	}
+	return resp.StatusCode, cleanHeader, bodyText, n
 }
 
 type limitedBufferWriter struct {

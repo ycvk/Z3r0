@@ -11,6 +11,7 @@ from schema.sandbox.traffic import (
 )
 from service.common.pagination import paginated_payload
 from service.sandbox.traffic import (
+    TrafficAccessError,
     clear_traffic,
     get_traffic_entry,
     ingest_traffic,
@@ -30,18 +31,21 @@ async def list_traffic_handler(
     method: str,
     user: AuthUser,
 ) -> CommonResponse:
-    result = await query_traffic(
-        user_id=user.id,
-        user_role=user.role,
-        sandbox_container_id=sandbox_container_id,
-        project_id=project_id,
-        query=query,
-        path=path,
-        status=status,
-        method=method,
-        page=page,
-        size=size,
-    )
+    try:
+        result = await query_traffic(
+            user_id=user.id,
+            user_role=user.role,
+            sandbox_container_id=sandbox_container_id,
+            project_id=project_id,
+            query=query,
+            path=path,
+            status=status,
+            method=method,
+            page=page,
+            size=size,
+        )
+    except TrafficAccessError as exc:
+        raise_api_error(HTTPStatus.NOT_FOUND, str(exc))
     return CommonResponse(data=ListTrafficResponse(**paginated_payload(result, result.items)))
 
 
@@ -53,7 +57,10 @@ async def get_traffic_entry_handler(traffic_id: int, user: AuthUser) -> CommonRe
 
 
 async def ingest_traffic_handler(request: IngestTrafficRequest, user: AuthUser) -> CommonResponse:
-    count = await ingest_traffic(request, owner_id=user.id)
+    try:
+        count = await ingest_traffic(request, owner_id=user.id, user_role=user.role)
+    except TrafficAccessError as exc:
+        raise_api_error(HTTPStatus.NOT_FOUND, str(exc))
     return CommonResponse(message="traffic ingested", data=IngestTrafficResponse(ingested=count))
 
 
@@ -63,10 +70,13 @@ async def clear_traffic_handler(
     project_id: int | None,
     user: AuthUser,
 ) -> CommonResponse:
-    deleted = await clear_traffic(
-        user_id=user.id,
-        user_role=user.role,
-        sandbox_container_id=sandbox_container_id,
-        project_id=project_id,
-    )
+    try:
+        deleted = await clear_traffic(
+            user_id=user.id,
+            user_role=user.role,
+            sandbox_container_id=sandbox_container_id,
+            project_id=project_id,
+        )
+    except TrafficAccessError as exc:
+        raise_api_error(HTTPStatus.NOT_FOUND, str(exc))
     return CommonResponse(message="traffic cleared", data=ClearTrafficResponse(deleted=deleted))

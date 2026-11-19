@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 const (
 	defaultControlProxyAddr = ":8000"
+	controlProxyAddrEnvName = "SANDBOX_CONTROL_PROXY_ADDR"
 	defaultNoVNCTarget      = "http://127.0.0.1:8080"
 	noVNCPathPrefix         = "/novnc"
 	websockifyPath          = "/websockify"
@@ -17,6 +19,19 @@ const (
 )
 
 func main() {
+	initCAOnly := flag.Bool("init-ca", false, "generate or load the sandbox MITM CA and exit")
+	flag.Parse()
+
+	caCertPath, caKeyPath := resolveMITMCAPaths()
+	authority, err := loadOrCreateMITMAuthority(caCertPath, caKeyPath)
+	if err != nil {
+		log.Fatalf("sandbox MITM CA initialization failed: %v", err)
+	}
+	mitmCA = authority
+	if *initCAOnly {
+		return
+	}
+
 	token := os.Getenv(tokenEnvName)
 	if token == "" {
 		log.Fatalf("%s is required", tokenEnvName)
@@ -28,20 +43,24 @@ func main() {
 	mux := newServerMux(token, passthroughProxy, noVNCProxy)
 	egressServer := newEgressProxyServer()
 
+	controlAddr := strings.TrimSpace(os.Getenv(controlProxyAddrEnvName))
+	if controlAddr == "" {
+		controlAddr = defaultControlProxyAddr
+	}
 	server := &http.Server{
-		Addr:              defaultControlProxyAddr,
+		Addr:              controlAddr,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	go func() {
-		log.Printf("sandbox egress listening on %s", defaultEgressProxyAddr)
+		log.Printf("sandbox egress listening on %s", egressServer.Addr)
 		if err := egressServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("sandbox egress failed: %v", err)
 		}
 	}()
 
-	log.Printf("sandbox control proxy listening on %s", defaultControlProxyAddr)
+	log.Printf("sandbox control proxy listening on %s", controlAddr)
 	log.Printf("sandbox control proxy novnc target=%s", noVNCTarget)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("sandbox control proxy failed: %v", err)
@@ -74,6 +93,7 @@ func newServerMux(token string, passthroughProxy http.Handler, noVNCProxy http.H
 	mux.HandleFunc("/files/mkdir", withAuthFunc(token, handleMkdir))
 	mux.HandleFunc("/egress", withAuthFunc(token, handleEgress))
 	mux.HandleFunc("/traffic", withAuthFunc(token, handleTraffic))
+	mux.HandleFunc("/ca.crt", withAuthFunc(token, handleCACert))
 	mux.Handle(noVNCPathPrefix+"/", noVNCProxy)
 	mux.HandleFunc(noVNCPathPrefix, withAuthFunc(token, func(w http.ResponseWriter, r *http.Request) {
 		target := noVNCPathPrefix + "/"

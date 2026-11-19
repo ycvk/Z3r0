@@ -5,6 +5,12 @@ from core.runtime.context import AgentRuntimeContext, AgentUserContext, main_age
 from core.runtime.coordination import set_main_agent_resume_handler
 from core.runtime.input_items import display_text_from_content
 from core.runtime.session import AgentSessionAgentSwitchError, get_agent_pool
+from core.sandbox.command_guard import (
+    approve_pending_command,
+    clear_pending_command,
+    has_pending_command,
+    is_guard_approval_reply,
+)
 from core.tools.sandbox import SANDBOX_SKILLS_DIR
 from logger import get_logger
 from middleware.system_user import AuthUser
@@ -95,6 +101,11 @@ async def submit_turn(
     ):
         raise SessionBusyError("stop running tasks before switching agent")
     display_text = display_text_from_content(content)
+    if has_pending_command(session_id):
+        if is_guard_approval_reply(display_text):
+            approve_pending_command(session_id)
+        else:
+            clear_pending_command(session_id)
     agent_code = await agent_sessions.ensure_chat_session_meta(
         session_id,
         display_text,

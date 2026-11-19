@@ -9,6 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from core.agent.constants import DEFAULT_AGENT_CODE
 from core.runtime.coordination import cancel_session_subagents
 from core.runtime.session import get_agent_pool, get_agent_registry
+from core.sandbox.command_guard import clear_session_guard
 from core.sandbox.command_jobs import cancel_session_async_sandbox_commands
 from database import get_async_session
 from logger import get_logger
@@ -403,6 +404,7 @@ async def delete_private_sessions_for_owner(owner_id: int) -> int:
 
 
 async def _teardown_session_runtime(session_id: str) -> None:
+    clear_session_guard(session_id)
     await cancel_session_subagents(session_id)
     await cancel_session_async_sandbox_commands(session_id)
     await get_agent_pool().discard(session_id)

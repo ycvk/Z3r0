@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime
 from urllib.parse import urlsplit
 
+import httpx
 from sqlalchemy import delete, func, or_
 from sqlmodel import col, select
 
 from database import get_async_session
 from logger import get_logger
+from model.sandbox.containers import SandboxContainer
 from model.sandbox.traffic import SandboxTrafficEntry
+from model.work_project.projects import WorkProject, WorkProjectOwner
+from schema.sandbox.containers import SandboxContainerStatus
 from schema.sandbox.traffic import (
     IngestTrafficRequest,
     TrafficEntryDetailSchema,
@@ -19,7 +24,6 @@ from schema.system_user.users import SystemUserRole
 from service.common.pagination import Page, paginate_statement
 from service.sandbox.control_proxy import (
     _get_http_client,
-    _url_host,
     resolve_sandbox_control_proxy_target,
     sandbox_control_proxy_token_headers,
 )
@@ -28,6 +32,25 @@ from service.sandbox.control_proxy import (
 logger = get_logger(__name__)
 
 _MAX_BODY_CHARS = 262_144
+_PROXY_TRAFFIC_ATTEMPTS = 2
+_PROXY_TRAFFIC_RETRY_SECONDS = 0.25
+_TRAFFIC_SYNC_INTERVAL_SECONDS = 3.0
+_TRAFFIC_SYNC_BATCH_SIZE = 16
+
+_traffic_sync_task: asyncio.Task[None] | None = None
+_container_sync_locks: dict[int, asyncio.Lock] = {}
+
+
+class TrafficAccessError(PermissionError):
+    pass
+
+
+def _sync_lock_for(container_id: int) -> asyncio.Lock:
+    lock = _container_sync_locks.get(container_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _container_sync_locks[container_id] = lock
+    return lock
 
 
 def _parse_url_parts(raw_url: str) -> tuple[str, str]:
@@ -50,6 +73,21 @@ def _loads_headers(raw: str) -> dict[str, str]:
     except Exception:
         pass
     return {}
+
+
+def _parse_proxy_created_at(raw_value: object, fallback: datetime) -> datetime:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        return fallback
+    text_value = raw_value.strip()
+    if text_value.endswith("Z"):
+        text_value = f"{text_value[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text_value)
+    except ValueError:
+        return fallback
+    if parsed.tzinfo is not None:
+        return parsed.astimezone().replace(tzinfo=None)
+    return parsed
 
 
 def _to_summary(row: SandboxTrafficEntry) -> TrafficEntrySummarySchema:
@@ -90,96 +128,292 @@ def _to_detail(row: SandboxTrafficEntry) -> TrafficEntryDetailSchema:
     )
 
 
+async def _can_access_sandbox_container(
+    container_id: int,
+    user_id: int,
+    user_role: SystemUserRole,
+) -> bool:
+    async with get_async_session() as session:
+        container = await session.get(SandboxContainer, container_id)
+        if container is None:
+            return False
+        if user_role == SystemUserRole.ADMIN or container.owner_id == user_id:
+            return True
+        bound_project = (
+            await session.exec(
+                select(WorkProject.id)
+                .join(WorkProjectOwner, WorkProjectOwner.project_id == WorkProject.id)
+                .where(
+                    WorkProject.sandbox_container_id == container_id,
+                    WorkProjectOwner.user_id == user_id,
+                )
+                .limit(1)
+            )
+        ).first()
+        return bound_project is not None
+
+
+async def _can_access_work_project(
+    project_id: int,
+    user_id: int,
+    user_role: SystemUserRole,
+) -> bool:
+    async with get_async_session() as session:
+        if await session.get(WorkProject, project_id) is None:
+            return False
+        if user_role == SystemUserRole.ADMIN:
+            return True
+        return await session.get(WorkProjectOwner, (project_id, user_id)) is not None
+
+
+async def _ensure_scope_access(
+    *,
+    user_id: int,
+    user_role: SystemUserRole,
+    sandbox_container_id: int | None,
+    project_id: int | None,
+) -> None:
+    if sandbox_container_id is not None:
+        if not await _can_access_sandbox_container(sandbox_container_id, user_id, user_role):
+            raise TrafficAccessError("sandbox container not found")
+    if project_id is not None:
+        if not await _can_access_work_project(project_id, user_id, user_role):
+            raise TrafficAccessError("work project not found")
+
+
+def _user_accessible_traffic_clause(user_id: int):
+    owned_containers = select(SandboxContainer.id).where(SandboxContainer.owner_id == user_id)
+    owned_projects = select(WorkProjectOwner.project_id).where(WorkProjectOwner.user_id == user_id)
+    project_containers = select(WorkProject.sandbox_container_id).where(
+        col(WorkProject.id).in_(owned_projects),
+        col(WorkProject.sandbox_container_id).is_not(None),
+    )
+    return or_(
+        SandboxTrafficEntry.owner_id == user_id,
+        col(SandboxTrafficEntry.sandbox_container_id).in_(owned_containers),
+        col(SandboxTrafficEntry.sandbox_container_id).in_(project_containers),
+        col(SandboxTrafficEntry.project_id).in_(owned_projects),
+    )
+
+
+async def _resolve_container_owner_and_project(
+    sandbox_container_id: int,
+    *,
+    owner_id: int | None,
+    project_id: int | None,
+) -> tuple[int, int | None]:
+    if owner_id is not None and owner_id > 0 and project_id is not None:
+        return owner_id, project_id
+    async with get_async_session() as session:
+        container = await session.get(SandboxContainer, sandbox_container_id)
+        resolved_owner = (
+            owner_id
+            if owner_id is not None and owner_id > 0
+            else (container.owner_id if container is not None else 0)
+        )
+        resolved_project = project_id
+        if resolved_project is None:
+            resolved_project = (
+                await session.exec(
+                    select(WorkProject.id)
+                    .where(WorkProject.sandbox_container_id == sandbox_container_id)
+                    .limit(1)
+                )
+            ).first()
+    return resolved_owner, resolved_project
+
+
+async def _request_proxy_traffic(
+    method: str,
+    url: str,
+    *,
+    headers: dict[str, str],
+    params: dict[str, int] | None = None,
+) -> httpx.Response:
+    last_error: Exception | None = None
+    for attempt in range(_PROXY_TRAFFIC_ATTEMPTS):
+        try:
+            response = await _get_http_client().request(
+                method,
+                url,
+                params=params,
+                headers=headers,
+                timeout=3.0,
+            )
+            response.raise_for_status()
+            return response
+        except (httpx.HTTPError, OSError) as exc:
+            last_error = exc
+            if attempt < _PROXY_TRAFFIC_ATTEMPTS - 1:
+                await asyncio.sleep(_PROXY_TRAFFIC_RETRY_SECONDS)
+    assert last_error is not None
+    raise last_error
+
+
 async def sync_container_traffic(
     sandbox_container_id: int,
     *,
-    owner_id: int = 0,
+    owner_id: int | None = None,
     project_id: int | None = None,
 ) -> int:
-    """Pull new HTTP traffic entries from the sandbox container's Go control proxy."""
-    try:
+    """Pull new HTTP/HTTPS traffic entries from the sandbox container's Go control proxy."""
+    async with _sync_lock_for(sandbox_container_id):
         target = await resolve_sandbox_control_proxy_target(sandbox_container_id, require_running=True)
-    except Exception:
-        return 0
-    if target is None:
-        return 0
+        if target is None:
+            return 0
 
+        resolved_owner, resolved_project = await _resolve_container_owner_and_project(
+            sandbox_container_id,
+            owner_id=owner_id,
+            project_id=project_id,
+        )
+
+        async with get_async_session() as session:
+            last_seq = int(
+                (
+                    await session.exec(
+                        select(func.coalesce(func.max(SandboxTrafficEntry.proxy_seq), 0)).where(
+                            SandboxTrafficEntry.sandbox_container_id == sandbox_container_id,
+                            SandboxTrafficEntry.source == "proxy",
+                        )
+                    )
+                ).one()
+                or 0
+            )
+
+        response = await _request_proxy_traffic(
+            "GET",
+            f"{target.base_url}/traffic",
+            headers=sandbox_control_proxy_token_headers(target),
+            params={"after_seq": last_seq},
+        )
+        payload = response.json()
+        raw_items = payload.get("items") if isinstance(payload, dict) else None
+        if not isinstance(raw_items, list) or not raw_items:
+            return 0
+
+        now = datetime.now()
+        seen_seqs: set[int] = set()
+        rows: list[SandboxTrafficEntry] = []
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            seq = int(item.get("seq") or 0)
+            if seq <= last_seq or seq in seen_seqs:
+                continue
+            seen_seqs.add(seq)
+            raw_url = str(item.get("url") or "")[:2048]
+            host, path = _parse_url_parts(raw_url)
+            host = str(item.get("host") or host)[:255]
+            path = str(item.get("path") or path)[:1024]
+            req_body = str(item.get("request_body") or "")[:_MAX_BODY_CHARS]
+            resp_body = str(item.get("response_body") or "")[:_MAX_BODY_CHARS]
+            resp_bytes = int(item.get("response_bytes") or len(resp_body.encode("utf-8", errors="ignore")))
+            rows.append(
+                SandboxTrafficEntry(
+                    owner_id=resolved_owner,
+                    sandbox_container_id=sandbox_container_id,
+                    project_id=resolved_project,
+                    proxy_seq=seq,
+                    source="proxy",
+                    method=str(item.get("method") or "GET").upper()[:16],
+                    url=raw_url,
+                    host=host,
+                    path=path,
+                    status_code=int(item.get("status_code") or 0),
+                    request_headers_json=json.dumps(item.get("request_headers") or {}, ensure_ascii=False),
+                    request_body=req_body,
+                    response_headers_json=json.dumps(item.get("response_headers") or {}, ensure_ascii=False),
+                    response_body=resp_body,
+                    response_bytes=max(resp_bytes, 0),
+                    duration_ms=max(int(item.get("duration_ms") or 0), 0),
+                    created_at=_parse_proxy_created_at(item.get("created_at"), now),
+                )
+            )
+        if not rows:
+            return 0
+        async with get_async_session() as session:
+            session.add_all(rows)
+            await session.commit()
+        return len(rows)
+
+
+async def sync_running_containers_traffic() -> None:
     async with get_async_session() as session:
-        last_seq = int(
+        container_ids = list(
             (
                 await session.exec(
-                    select(func.coalesce(func.max(SandboxTrafficEntry.proxy_seq), 0)).where(
-                        SandboxTrafficEntry.sandbox_container_id == sandbox_container_id,
-                        SandboxTrafficEntry.source == "proxy",
+                    select(SandboxContainer.id).where(
+                        SandboxContainer.status == SandboxContainerStatus.RUNNING,
+                        SandboxContainer.control_proxy_host_port > 0,
+                        SandboxContainer.control_proxy_token != "",
                     )
                 )
-            ).one()
-            or 0
+            ).all()
         )
+    valid_ids = [cid for cid in container_ids if cid is not None]
+    for offset in range(0, len(valid_ids), _TRAFFIC_SYNC_BATCH_SIZE):
+        batch = valid_ids[offset:offset + _TRAFFIC_SYNC_BATCH_SIZE]
+        await asyncio.gather(*(_sync_container_traffic_safely(cid) for cid in batch))
 
-    url = f"http://{_url_host(target.host_address)}:{target.control_port}/traffic"
+
+async def _sync_container_traffic_safely(container_id: int) -> None:
     try:
-        response = await _get_http_client().get(
-            url,
-            params={"after_seq": last_seq},
-            headers=sandbox_control_proxy_token_headers(target),
-            timeout=3.0,
-        )
-        if response.status_code != 200:
-            return 0
-        payload = response.json()
+        await sync_container_traffic(container_id)
+    except asyncio.CancelledError:
+        raise
     except Exception:
-        return 0
-
-    raw_items = payload.get("items") if isinstance(payload, dict) else None
-    if not isinstance(raw_items, list) or not raw_items:
-        return 0
-
-    now = datetime.now()
-    rows: list[SandboxTrafficEntry] = []
-    for item in raw_items:
-        if not isinstance(item, dict):
-            continue
-        seq = int(item.get("seq") or 0)
-        if seq <= last_seq:
-            continue
-        raw_url = str(item.get("url") or "")[:2048]
-        host, path = _parse_url_parts(raw_url)
-        host = str(item.get("host") or host)[:255]
-        path = str(item.get("path") or path)[:1024]
-        req_body = str(item.get("request_body") or "")[:_MAX_BODY_CHARS]
-        resp_body = str(item.get("response_body") or "")[:_MAX_BODY_CHARS]
-        resp_bytes = int(item.get("response_bytes") or len(resp_body.encode("utf-8", errors="ignore")))
-        rows.append(
-            SandboxTrafficEntry(
-                owner_id=owner_id,
-                sandbox_container_id=sandbox_container_id,
-                project_id=project_id,
-                proxy_seq=seq,
-                source="proxy",
-                method=str(item.get("method") or "GET").upper()[:16],
-                url=raw_url,
-                host=host,
-                path=path,
-                status_code=int(item.get("status_code") or 0),
-                request_headers_json=json.dumps(item.get("request_headers") or {}, ensure_ascii=False),
-                request_body=req_body,
-                response_headers_json=json.dumps(item.get("response_headers") or {}, ensure_ascii=False),
-                response_body=resp_body,
-                response_bytes=max(resp_bytes, 0),
-                duration_ms=max(int(item.get("duration_ms") or 0), 0),
-                created_at=now,
-            )
-        )
-    if not rows:
-        return 0
-    async with get_async_session() as session:
-        session.add_all(rows)
-        await session.commit()
-    return len(rows)
+        logger.warning("background sandbox traffic sync failed: container=%s", container_id, exc_info=True)
 
 
-async def ingest_traffic(request: IngestTrafficRequest, *, owner_id: int) -> int:
+async def _traffic_sync_loop() -> None:
+    while True:
+        try:
+            await sync_running_containers_traffic()
+            await asyncio.sleep(_TRAFFIC_SYNC_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("sandbox traffic sync loop iteration failed")
+            await asyncio.sleep(_TRAFFIC_SYNC_INTERVAL_SECONDS)
+
+
+async def start_sandbox_traffic_sync_runtime() -> None:
+    global _traffic_sync_task
+    if _traffic_sync_task is not None and not _traffic_sync_task.done():
+        return
+    _traffic_sync_task = asyncio.create_task(
+        _traffic_sync_loop(),
+        name="sandbox-traffic-sync-runtime",
+    )
+    logger.info("sandbox traffic sync runtime started")
+
+
+async def stop_sandbox_traffic_sync_runtime() -> None:
+    global _traffic_sync_task
+    task, _traffic_sync_task = _traffic_sync_task, None
+    if task is None or task.done():
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    logger.info("sandbox traffic sync runtime stopped")
+
+
+async def ingest_traffic(
+    request: IngestTrafficRequest,
+    *,
+    owner_id: int,
+    user_role: SystemUserRole = SystemUserRole.USER,
+) -> int:
+    await _ensure_scope_access(
+        user_id=owner_id,
+        user_role=user_role,
+        sandbox_container_id=request.sandbox_container_id,
+        project_id=request.project_id,
+    )
     now = datetime.now()
     rows: list[SandboxTrafficEntry] = []
     for item in request.items:
@@ -245,12 +479,18 @@ async def query_traffic(
     page: int = 1,
     size: int = 20,
 ) -> Page[TrafficEntrySummarySchema]:
+    await _ensure_scope_access(
+        user_id=user_id,
+        user_role=user_role,
+        sandbox_container_id=sandbox_container_id,
+        project_id=project_id,
+    )
     if sandbox_container_id is not None:
         await sync_container_traffic(sandbox_container_id, owner_id=user_id, project_id=project_id)
 
     stmt = select(SandboxTrafficEntry).order_by(col(SandboxTrafficEntry.id).desc())
     if user_role != SystemUserRole.ADMIN and sandbox_container_id is None and project_id is None:
-        stmt = stmt.where(SandboxTrafficEntry.owner_id == user_id)
+        stmt = stmt.where(_user_accessible_traffic_clause(user_id))
     if sandbox_container_id is not None:
         stmt = stmt.where(SandboxTrafficEntry.sandbox_container_id == sandbox_container_id)
     if project_id is not None:
@@ -291,9 +531,19 @@ async def get_traffic_entry(
         row = await session.get(SandboxTrafficEntry, traffic_id)
     if row is None:
         return None
-    if user_role != SystemUserRole.ADMIN and row.owner_id not in {0, user_id}:
-        return None
-    return _to_detail(row)
+    if user_role == SystemUserRole.ADMIN:
+        return _to_detail(row)
+    if user_id > 0 and row.owner_id == user_id:
+        return _to_detail(row)
+    if row.sandbox_container_id is not None and await _can_access_sandbox_container(
+        row.sandbox_container_id, user_id, user_role
+    ):
+        return _to_detail(row)
+    if row.project_id is not None and await _can_access_work_project(
+        row.project_id, user_id, user_role
+    ):
+        return _to_detail(row)
+    return None
 
 
 async def clear_traffic(
@@ -303,18 +553,25 @@ async def clear_traffic(
     sandbox_container_id: int | None = None,
     project_id: int | None = None,
 ) -> int:
+    await _ensure_scope_access(
+        user_id=user_id,
+        user_role=user_role,
+        sandbox_container_id=sandbox_container_id,
+        project_id=project_id,
+    )
     if sandbox_container_id is not None:
-        try:
+        async with _sync_lock_for(sandbox_container_id):
             target = await resolve_sandbox_control_proxy_target(sandbox_container_id, require_running=True)
             if target is not None:
-                url = f"http://{_url_host(target.host_address)}:{target.control_port}/traffic"
-                await _get_http_client().delete(url, headers=sandbox_control_proxy_token_headers(target), timeout=3.0)
-        except Exception:
-            pass
+                await _request_proxy_traffic(
+                    "DELETE",
+                    f"{target.base_url}/traffic",
+                    headers=sandbox_control_proxy_token_headers(target),
+                )
 
     stmt = delete(SandboxTrafficEntry)
     if user_role != SystemUserRole.ADMIN and sandbox_container_id is None and project_id is None:
-        stmt = stmt.where(SandboxTrafficEntry.owner_id == user_id)
+        stmt = stmt.where(_user_accessible_traffic_clause(user_id))
     if sandbox_container_id is not None:
         stmt = stmt.where(SandboxTrafficEntry.sandbox_container_id == sandbox_container_id)
     if project_id is not None:

@@ -9610,6 +9610,15 @@ export interface operations {
                     "application/json": components["schemas"]["CommonResponse_Any_"];
                 };
             };
+            /** @description Traffic entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -9644,6 +9653,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Traffic entry not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9695,6 +9713,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Traffic entry not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

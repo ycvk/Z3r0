@@ -4,6 +4,7 @@ from uuid import uuid4
 from sqlmodel import col, select
 
 from core.runtime.coordination import cancel_session_subagents
+from core.sandbox.command_guard import clear_session_guard
 from core.sandbox.command_jobs import cancel_session_async_sandbox_commands
 from database import get_async_session
 from logger import get_logger
@@ -244,6 +245,7 @@ async def cancel_flow(public_id: str, user: AuthUser) -> FlowSchema | None:
         session_id = flow.session_id
     from core.flow.controller import cancel_scheduled_flow
     await cancel_scheduled_flow(public_id)
+    clear_session_guard(session_id)
     await cancel_session_subagents(session_id)
     await cancel_session_async_sandbox_commands(session_id)
     try:

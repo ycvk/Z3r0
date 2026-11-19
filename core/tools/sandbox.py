@@ -8,7 +8,7 @@ from agents import RunContextWrapper, function_tool
 from core.runtime.context import AgentRuntimeContext
 from core.work_project import validate_specialist_execution_context
 from core.sandbox import command_output
-from core.sandbox.command_guard import check_command_guard, strip_guard_prefix
+from core.sandbox.command_guard import check_command_guard
 from core.sandbox.command_jobs import cancel_async_sandbox_command, start_async_sandbox_command
 from core.sandbox.command_output import COMMAND_TIMEOUT_ERROR
 from schema.sandbox.async_jobs import SandboxAsyncJobStatus
@@ -87,21 +87,21 @@ async def execute_sync_command(
         return _error_result("No sandbox container selected.")
     if error := await validate_specialist_execution_context(ctx.context):
         return _error_result(error)
-    if not command.strip():
+    command_text = command.strip()
+    if not command_text:
         return _error_result("sandbox container command is required")
-    if reason := check_command_guard(command, session_id=ctx.context.session_id):
+    if reason := check_command_guard(command_text, session_id=ctx.context.session_id):
         return _error_result(
-            f"[Command Guard] High-risk command intercepted ({reason}). "
-            "Ask the operator for explicit confirmation before re-running with ALLOW_GUARD=1 prefix."
+            f"[Command Guard] High-risk command intercepted ({reason}): `{command_text}`. "
+            "Ask the operator to reply ALLOW in chat before re-running this exact command."
         )
-    command = strip_guard_prefix(command).strip()
     timeout = _clamp_timeout(timeout_seconds, _SYNC_COMMAND_TIMEOUT_SECONDS)
     output_path = command_output.new_output_path()
 
     try:
         result = await execute_sandbox_container_command(
             id=container_id,
-            command=command_output.capture_command(command, output_path),
+            command=command_output.capture_command(command_text, output_path),
             timeout_seconds=timeout,
         )
     except asyncio.CancelledError:
@@ -152,10 +152,9 @@ async def execute_async_command(
         return _error_result("sandbox container command is required")
     if reason := check_command_guard(command_text, session_id=ctx.context.session_id):
         return _error_result(
-            f"[Command Guard] High-risk command intercepted ({reason}). "
-            "Ask the operator for explicit confirmation before re-running with ALLOW_GUARD=1 prefix."
+            f"[Command Guard] High-risk command intercepted ({reason}): `{command_text}`. "
+            "Ask the operator to reply ALLOW in chat before re-running this exact command."
         )
-    command_text = strip_guard_prefix(command_text).strip()
     if not ctx.context.agent_instance_id:
         return _error_result("agent instance id is required for async command execution")
 

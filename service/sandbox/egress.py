@@ -8,6 +8,7 @@ from service.egress_proxy.upstream import egress_proxy_upstream
 
 NO_PROXY_VALUE = "localhost,127.0.0.1,::1"
 LOCAL_EGRESS_PROXY_URL = "http://127.0.0.1:8118"
+SYSTEM_CA_BUNDLE_PATH = "/etc/ssl/certs/ca-certificates.crt"
 EGRESS_UPSTREAM_TYPE_ENV = "SANDBOX_EGRESS_UPSTREAM_TYPE"
 EGRESS_UPSTREAM_ADDR_ENV = "SANDBOX_EGRESS_UPSTREAM_ADDR"
 
@@ -28,6 +29,9 @@ def sandbox_runtime_proxy_environment() -> dict[str, str]:
         "all_proxy": LOCAL_EGRESS_PROXY_URL,
         "NO_PROXY": NO_PROXY_VALUE,
         "no_proxy": NO_PROXY_VALUE,
+        "SSL_CERT_FILE": SYSTEM_CA_BUNDLE_PATH,
+        "REQUESTS_CA_BUNDLE": SYSTEM_CA_BUNDLE_PATH,
+        "CURL_CA_BUNDLE": SYSTEM_CA_BUNDLE_PATH,
     }
 
 

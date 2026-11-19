@@ -83,15 +83,12 @@ async def activate_work_project_context(context: AgentRuntimeContext) -> AsyncIt
                     "project_mutation_allowed": False,
                 }
             sections.append(format_work_project_context(payload))
-        try:
-            creds = await list_credentials_for_context(
-                session_id=context.session_id,
-                project_id=context.work_project_id,
-            )
-            if creds:
-                sections.append(format_credentials_context([item.model_dump(mode="json") for item in creds]))
-        except Exception:
-            logger.exception("failed to load Credentials Vault context")
+        creds = await list_credentials_for_context(
+            session_id=context.session_id,
+            project_id=context.work_project_id,
+        )
+        if creds:
+            sections.append(format_credentials_context([item.model_dump(mode="json") for item in creds]))
         context.work_project_context = "\n\n".join(sections)
         yield
     finally:

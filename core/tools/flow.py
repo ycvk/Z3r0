@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from core.flow.barriers import FlowBarrier, set_barrier
 from core.runtime.context import AgentRuntimeContext
 from core.sandbox import command_output
-from core.sandbox.command_guard import check_command_guard, strip_guard_prefix
+from core.sandbox.command_guard import check_command_guard
 from core.sandbox.command_jobs import start_async_sandbox_command
 from core.work_project import validate_specialist_execution_context
 from schema.flow.flows import MAX_FLOW_SUBTASKS
@@ -82,11 +82,10 @@ async def terminal(
         question = (
             f"[Command Guard] High-risk command intercepted ({reason}):\n"
             f"`{command_text}`\n"
-            "Reply ALLOW to permit execution in this session, or provide alternative instructions."
+            "Reply ALLOW to permit running this exact command once, or provide alternative instructions."
         )
         set_barrier(ctx.context.session_id, FlowBarrier(kind="ask", payload={"question": question}))
         return _json_ok(barrier="ask", intercepted=True, reason=reason)
-    command_text = strip_guard_prefix(command_text).strip()
     if not ctx.context.agent_instance_id:
         return _error_result("agent instance id is required for async command execution")
 
