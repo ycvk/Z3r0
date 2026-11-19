@@ -66,6 +66,16 @@ async def test_chat_and_flow_sessions_mount_their_own_command_tools(bind: Any) -
 
 
 @pytest.mark.asyncio
+async def test_every_agent_mounts_each_tool_once(bind: Any) -> None:
+    for flow_bound in (False, True):
+        graph = bind(flow_bound=flow_bound)
+        for code in (DEFAULT_AGENT_CODE, *SPECIALIST_AGENT_CODES):
+            names = [tool.name for tool in graph.get(code).tools]
+            repeated = sorted({name for name in names if names.count(name) > 1})
+            assert not repeated, f"{code} flow_bound={flow_bound} mounts {repeated} more than once"
+
+
+@pytest.mark.asyncio
 async def test_only_a_successful_background_dispatch_ends_the_turn(bind: Any) -> None:
     chat = bind(flow_bound=False).get(SPECIALIST_CODE)
     assert await _ends_turn(chat, "execute_async_command", {"status": "running"})

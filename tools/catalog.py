@@ -139,11 +139,8 @@ FLOW_CONTROL_TOOLS = (
     ToolMount(export_report, exports_reports=True),
 )
 
-_CHAT_COMMAND_TOOLS = (execute_sync_command, execute_async_command)
-
-
 def _flow_specialist_tools(chat_tools: tuple[ToolMount, ...]) -> tuple[ToolMount, ...]:
-    remaining = tuple(mount for mount in chat_tools if mount.tool not in _CHAT_COMMAND_TOOLS)
+    remaining = tuple(mount for mount in chat_tools if mount not in SANDBOX_TOOLS)
     return (*FLOW_SANDBOX_TOOLS, ToolMount(web_search), *remaining)
 
 

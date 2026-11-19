@@ -15,6 +15,10 @@ All notable changes to Z3r0 are documented in this file.
 - Replaced startup table creation with Alembic migrations under `migrations/`; the baseline revision builds an empty database and adopts an existing one in place.
 - Moved the agent tools from `core/tools` to the top-level `tools` package, above `service` in the layer order. `tools/catalog.py` declares the chat and Flow tool mounts of every agent, and `app.py` passes that catalog to the agent runtime at startup.
 
+### Fixed
+
+- Fixed specialists in a Flow with a sandbox receiving `read_sandbox_command_output`, `cancel_sandbox_async_job`, and `load_skill` twice in their tool list.
+
 ## [0.3.1] - 2026-11-19
 
 ### Added
