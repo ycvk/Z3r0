@@ -79,6 +79,13 @@ type = "layers"
 # handler serves HTTP requests and tools serves agent tool calls; neither imports the other.
 layers = ["router", "handler | tools", "service", "core", "middleware", "model", "schema", "utils"]
 
+[[tool.importlinter.contracts]]
+name = "HTTP entry points read records through services"
+type = "forbidden"
+source_modules = ["router", "handler"]
+forbidden_modules = ["model"]
+allow_indirect_imports = true
+
 [tool.alembic]
 script_location = "%(here)s/migrations"
 prepend_sys_path = ["."]

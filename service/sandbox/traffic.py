@@ -13,7 +13,7 @@ from database import get_async_session
 from logger import get_logger
 from model.sandbox.containers import SandboxContainer
 from model.sandbox.traffic import SandboxTrafficEntry
-from model.work_project.projects import WorkProject, WorkProjectOwner
+from model.work_project.projects import WorkProject
 from schema.sandbox.containers import SandboxContainerStatus
 from schema.sandbox.traffic import (
     IngestTrafficRequest,
@@ -21,6 +21,12 @@ from schema.sandbox.traffic import (
     TrafficEntrySummarySchema,
 )
 from schema.system_user.users import SystemUserRole
+from service.common.access import (
+    can_access_work_project,
+    can_view_sandbox_container,
+    can_view_traffic_entry,
+    traffic_entry_scope,
+)
 from service.common.pagination import Page, paginate_statement
 from service.sandbox.control_proxy import (
     _get_http_client,
@@ -137,44 +143,6 @@ def _to_detail(row: SandboxTrafficEntry) -> TrafficEntryDetailSchema:
     )
 
 
-async def _can_access_sandbox_container(
-    container_id: int,
-    user_id: int,
-    user_role: SystemUserRole,
-) -> bool:
-    async with get_async_session() as session:
-        container = await session.get(SandboxContainer, container_id)
-        if container is None:
-            return False
-        if user_role == SystemUserRole.ADMIN or container.owner_id == user_id:
-            return True
-        bound_project = (
-            await session.exec(
-                select(WorkProject.id)
-                .join(WorkProjectOwner, WorkProjectOwner.project_id == WorkProject.id)
-                .where(
-                    WorkProject.sandbox_container_id == container_id,
-                    WorkProjectOwner.user_id == user_id,
-                )
-                .limit(1)
-            )
-        ).first()
-        return bound_project is not None
-
-
-async def _can_access_work_project(
-    project_id: int,
-    user_id: int,
-    user_role: SystemUserRole,
-) -> bool:
-    async with get_async_session() as session:
-        if await session.get(WorkProject, project_id) is None:
-            return False
-        if user_role == SystemUserRole.ADMIN:
-            return True
-        return await session.get(WorkProjectOwner, (project_id, user_id)) is not None
-
-
 async def _bound_container_id_for_project(project_id: int) -> int | None:
     async with get_async_session() as session:
         project = await session.get(WorkProject, project_id)
@@ -189,26 +157,11 @@ async def _ensure_scope_access(
     project_id: int | None,
 ) -> None:
     if sandbox_container_id is not None:
-        if not await _can_access_sandbox_container(sandbox_container_id, user_id, user_role):
+        if not await can_view_sandbox_container(sandbox_container_id, user_id, user_role):
             raise TrafficAccessError("sandbox container not found")
     if project_id is not None:
-        if not await _can_access_work_project(project_id, user_id, user_role):
+        if not await can_access_work_project(project_id, user_id, user_role):
             raise TrafficAccessError("work project not found")
-
-
-def _user_accessible_traffic_clause(user_id: int):
-    owned_containers = select(SandboxContainer.id).where(SandboxContainer.owner_id == user_id)
-    owned_projects = select(WorkProjectOwner.project_id).where(WorkProjectOwner.user_id == user_id)
-    project_containers = select(WorkProject.sandbox_container_id).where(
-        col(WorkProject.id).in_(owned_projects),
-        col(WorkProject.sandbox_container_id).is_not(None),
-    )
-    return or_(
-        SandboxTrafficEntry.owner_id == user_id,
-        col(SandboxTrafficEntry.sandbox_container_id).in_(owned_containers),
-        col(SandboxTrafficEntry.sandbox_container_id).in_(project_containers),
-        col(SandboxTrafficEntry.project_id).in_(owned_projects),
-    )
 
 
 async def _resolve_container_owner_and_project(
@@ -526,9 +479,11 @@ async def query_traffic(
     if sync_container_id is not None:
         await sync_container_traffic(sync_container_id, owner_id=user_id, project_id=project_id)
 
-    stmt = select(SandboxTrafficEntry).order_by(col(SandboxTrafficEntry.id).desc())
-    if user_role != SystemUserRole.ADMIN and sandbox_container_id is None and project_id is None:
-        stmt = stmt.where(_user_accessible_traffic_clause(user_id))
+    stmt = (
+        select(SandboxTrafficEntry)
+        .where(traffic_entry_scope(user_id, user_role))
+        .order_by(col(SandboxTrafficEntry.id).desc())
+    )
     if sandbox_container_id is not None:
         stmt = stmt.where(SandboxTrafficEntry.sandbox_container_id == sandbox_container_id)
     if project_id is not None:
@@ -575,21 +530,9 @@ async def get_traffic_entry(
 ) -> TrafficEntryDetailSchema | None:
     async with get_async_session() as session:
         row = await session.get(SandboxTrafficEntry, traffic_id)
-    if row is None:
+    if row is None or not await can_view_traffic_entry(row, user_id, user_role):
         return None
-    if user_role == SystemUserRole.ADMIN:
-        return _to_detail(row)
-    if user_id > 0 and row.owner_id == user_id:
-        return _to_detail(row)
-    if row.sandbox_container_id is not None and await _can_access_sandbox_container(
-        row.sandbox_container_id, user_id, user_role
-    ):
-        return _to_detail(row)
-    if row.project_id is not None and await _can_access_work_project(
-        row.project_id, user_id, user_role
-    ):
-        return _to_detail(row)
-    return None
+    return _to_detail(row)
 
 
 async def clear_traffic(
@@ -621,9 +564,7 @@ async def clear_traffic(
                     headers=sandbox_control_proxy_token_headers(target),
                 )
 
-    stmt = delete(SandboxTrafficEntry)
-    if user_role != SystemUserRole.ADMIN and sandbox_container_id is None and project_id is None:
-        stmt = stmt.where(_user_accessible_traffic_clause(user_id))
+    stmt = delete(SandboxTrafficEntry).where(traffic_entry_scope(user_id, user_role))
     if sandbox_container_id is not None:
         stmt = stmt.where(SandboxTrafficEntry.sandbox_container_id == sandbox_container_id)
     if project_id is not None:

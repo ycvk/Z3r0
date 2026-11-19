@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import Integer, String, cast, delete, func, or_, tuple_, update
-from sqlmodel import select
+from sqlmodel import col, select
 
 from core.agent.constants import DEFAULT_AGENT_CODE
 from database import get_async_session
@@ -34,6 +34,12 @@ from schema.work_project.projects import (
 )
 from schema.work_project.workflow import WorkProjectTargetStatus, WorkProjectWorkItemStatus
 from service.agent.sessions import cancel_sessions, delete_session, ensure_sdk_session_row, list_sessions
+from service.common.access import (
+    can_access_work_project,
+    can_access_work_project_in_tx,
+    can_manage_sandbox_container,
+    work_project_scope,
+)
 from service.common.pagination import Page, paginate_statement
 from service.sandbox.egress import sandbox_egress_label
 from service.sandbox.records import sandbox_container_schema
@@ -116,7 +122,7 @@ async def get_work_project_for_user(
     user_role: SystemUserRole,
 ) -> WorkProjectSchema | None:
     async with get_async_session() as session:
-        if not await _can_access_work_project_in_tx(session, id, user_id, user_role):
+        if not await can_access_work_project_in_tx(session, id, user_id, user_role):
             return None
         project = await session.get(WorkProject, id)
         if project is None:
@@ -321,7 +327,6 @@ async def query_work_projects_for_user(
         page=page,
         size=size,
         keyword=keyword,
-        owner_user_id=None if user_role == SystemUserRole.ADMIN else user_id,
         user_id=user_id,
         user_role=user_role,
     )
@@ -344,10 +349,7 @@ async def create_work_project_session(
         )).first()
         if project is None:
             return WorkProjectSessionCreateResult(not_found=True)
-        if (
-            user_role != SystemUserRole.ADMIN
-            and await session.get(WorkProjectOwner, (project_id, owner_id)) is None
-        ):
+        if not await can_access_work_project_in_tx(session, project_id, owner_id, user_role):
             return WorkProjectSessionCreateResult(not_found=True)
         if not can_create_work_project_session(project.status):
             return WorkProjectSessionCreateResult(inactive=True)
@@ -400,7 +402,7 @@ async def can_run_work_project_session(
             return False
         if meta.project_id is None:
             return True
-        if not await _can_access_work_project_in_tx(session, meta.project_id, user_id, user_role):
+        if not await can_access_work_project_in_tx(session, meta.project_id, user_id, user_role):
             return False
         project = await session.get(WorkProject, meta.project_id)
         return project is not None and can_create_work_project_session(project.status)
@@ -508,11 +510,10 @@ async def _query_work_projects(
     page: int,
     size: int,
     keyword: str,
-    owner_user_id: int | None = None,
-    user_id: int | None = None,
-    user_role: SystemUserRole | None = None,
+    user_id: int,
+    user_role: SystemUserRole,
 ) -> Page[WorkProjectSummarySchema]:
-    statement = select(WorkProject).order_by(WorkProject.id)
+    statement = select(WorkProject).where(work_project_scope(user_id, user_role)).order_by(col(WorkProject.id))
 
     keyword = keyword.strip()
     if keyword:
@@ -525,11 +526,6 @@ async def _query_work_projects(
                 cast(WorkProject.type, String).ilike(pattern),
             )
         )
-    if owner_user_id is not None:
-        statement = statement.join(
-            WorkProjectOwner,
-            WorkProjectOwner.project_id == WorkProject.id,
-        ).where(WorkProjectOwner.user_id == owner_user_id)
     page_result = await paginate_statement(statement, page=page, size=size)
     projects = page_result.items
 
@@ -860,7 +856,7 @@ async def _validate_project_sandbox_container(
     container = (await session.exec(statement)).first()
     if container is None:
         return "Selected sandbox container not found"
-    if user_role != SystemUserRole.ADMIN and container.owner_id != user_id:
+    if not can_manage_sandbox_container(container, user_id, user_role):
         return "Selected sandbox container is not available to the current user"
 
     bound_to_current_project = project_id is not None and (await session.exec(
@@ -981,25 +977,3 @@ def _duplicate_asset_identity(assets: list[WorkProjectAssetRequest]) -> str:
             return f"{asset.kind.value}:{asset.locator}"
         seen.add(asset.identity)
     return ""
-
-
-async def can_access_work_project(
-    project_id: int,
-    user_id: int,
-    user_role: SystemUserRole,
-) -> bool:
-    async with get_async_session() as session:
-        return await _can_access_work_project_in_tx(session, project_id, user_id, user_role)
-
-
-async def _can_access_work_project_in_tx(
-    session,
-    project_id: int,
-    user_id: int,
-    user_role: SystemUserRole,
-) -> bool:
-    if await session.get(WorkProject, project_id) is None:
-        return False
-    if user_role == SystemUserRole.ADMIN:
-        return True
-    return await session.get(WorkProjectOwner, (project_id, user_id)) is not None

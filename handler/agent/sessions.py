@@ -28,6 +28,7 @@ from schema.common.responses import CommonResponse
 from service.agent import runtime as agent_runtime
 from service.agent import reports as agent_reports
 from service.agent import sessions as agent_sessions
+from service.common.access import can_access_agent_session
 from service.common.pagination import paginated_payload
 
 
@@ -181,7 +182,7 @@ async def download_agent_report_handler(report_id: str, user: AuthUser) -> FileR
         raise_api_error(HTTPStatus.NOT_FOUND, str(exc))
 
     session_id = agent_reports.report_session_id(report_path)
-    if not session_id or not await agent_sessions.can_access_session(session_id, user.id, user.role):
+    if not session_id or not await can_access_agent_session(session_id, user.id, user.role):
         raise_api_error(HTTPStatus.NOT_FOUND, "Report file not found")
 
     return FileResponse(
@@ -196,7 +197,7 @@ async def handle_agent_stream(websocket: WebSocket, session_id: str, token: str)
     if user is None:
         await websocket.close(code=ws_status.WS_1008_POLICY_VIOLATION)
         return
-    if not await agent_sessions.can_access_session(session_id, user.id, user.role):
+    if not await can_access_agent_session(session_id, user.id, user.role):
         await websocket.close(code=ws_status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -283,7 +284,7 @@ async def _forward_events(
             if timed_out or loop.time() >= next_access_check:
                 next_access_check = loop.time() + _ACCESS_CHECK_INTERVAL_SECONDS
                 current_user = await resolve_current_user(user)
-                if current_user is None or not await agent_sessions.can_access_session(
+                if current_user is None or not await can_access_agent_session(
                     session_id,
                     current_user.id,
                     current_user.role,

@@ -65,6 +65,7 @@ from schema.work_project.workflow import (
     WorkProjectWorkLogSchema,
 )
 from service.agent import credentials as agent_credentials
+from service.common.access import can_access_work_project
 from service.common.pagination import Page, paginate_statement
 from service.work_project.assets import query_work_project_assets
 from service.work_project.evidence import (
@@ -72,7 +73,6 @@ from service.work_project.evidence import (
     create_work_project_evidence,
     query_work_project_evidence,
 )
-from service.work_project.projects import can_access_work_project
 from service.work_project.work_item_records import query_work_project_work_item_records
 
 

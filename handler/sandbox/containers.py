@@ -8,7 +8,6 @@ from fastapi import UploadFile, WebSocket, WebSocketDisconnect, status as ws_sta
 from fastapi.responses import Response as FastAPIResponse, StreamingResponse
 from fastapi.websockets import WebSocketState
 
-from database import get_async_session
 from handler.common.http import raise_api_error
 from handler.common.websocket import (
     authenticate_ws_token,
@@ -19,7 +18,6 @@ from handler.common.websocket import (
 )
 from logger import get_logger
 from middleware.system_user import AuthUser, resolve_current_user
-from model.sandbox.containers import SandboxContainer
 from schema.common.responses import CommonResponse
 from schema.sandbox.containers import (
     ContainerFileCopyRequest,
@@ -40,6 +38,7 @@ from schema.sandbox.containers import (
     UpdateSandboxContainerEgressRequest,
 )
 from schema.system_user.users import SystemUserRole
+from service.common.access import can_assign_sandbox_container_owner, sandbox_container_manageability
 from service.common.pagination import paginated_payload
 from service.sandbox.files import (
     ContainerUploadSource,
@@ -74,7 +73,6 @@ from service.sandbox.records import (
     query_sandbox_container_host_options,
     query_sandbox_container_image_options,
     query_sandbox_containers,
-    sandbox_container_is_manageable_by_user,
     sandbox_container_schema,
 )
 from service.sandbox.shell import (
@@ -110,9 +108,9 @@ async def create_sandbox_container_handler(
     request: CreateSandboxContainerRequest,
     user: AuthUser,
 ) -> CommonResponse:
-    if user.role != SystemUserRole.ADMIN and request.owner_id not in {None, user.id}:
+    owner_id = request.owner_id if request.owner_id is not None else user.id
+    if not can_assign_sandbox_container_owner(owner_id, user.id, user.role):
         raise_api_error(HTTPStatus.FORBIDDEN, "No permission to assign the sandbox container owner")
-    owner_id = request.owner_id if user.role == SystemUserRole.ADMIN and request.owner_id is not None else user.id
     result = await create_sandbox_container(
         host_id=request.host_id,
         image_id=request.image_id,
@@ -249,11 +247,7 @@ async def query_sandbox_container_image_options_handler(
 
 
 async def _require_manage_permission(id: int, user: AuthUser) -> None:
-    manageable = await sandbox_container_is_manageable_by_user(
-        id=id,
-        user_id=user.id,
-        user_role=user.role,
-    )
+    manageable = await sandbox_container_manageability(id, user.id, user.role)
     if manageable is None:
         raise_api_error(HTTPStatus.NOT_FOUND, "Sandbox container not found")
     if not manageable:
@@ -266,7 +260,7 @@ async def handle_container_shell_stream(websocket: WebSocket, id: int, token: st
         await websocket.close(code=ws_status.WS_1008_POLICY_VIOLATION)
         return
 
-    if not await _can_access_container_by_id(user, id):
+    if not await _can_manage_container(user, id):
         await websocket.close(code=ws_status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -297,7 +291,7 @@ async def handle_container_shell_stream(websocket: WebSocket, id: int, token: st
             )
             if not done:
                 current_user = await resolve_current_user(user)
-                if current_user is None or not await _can_access_container_by_id(current_user, id):
+                if current_user is None or not await _can_manage_container(current_user, id):
                     await _close_silently(websocket, ws_status.WS_1008_POLICY_VIOLATION)
                     return
                 user = current_user
@@ -374,19 +368,18 @@ async def _send_shell_keepalive(websocket: WebSocket, send_lock: asyncio.Lock) -
             return
 
 
-async def _can_access_container_by_id(user, container_id: int) -> bool:
-    if user.role == SystemUserRole.ADMIN:
-        return True
-    async with get_async_session() as session:
-        container = await session.get(SandboxContainer, container_id)
-        return container is not None and container.owner_id == user.id
+async def _can_manage_container(user: AuthUser, container_id: int) -> bool:
+    return await sandbox_container_manageability(container_id, user.id, user.role) is True
 
 
 # Container file manager handlers
 
 
-async def _require_running_container_access(id: int, action: str, user=None) -> None:
-    if user is not None and not await _can_access_container_by_id(user, id):
+async def _require_running_container_access(id: int, action: str, user: AuthUser) -> None:
+    manageable = await sandbox_container_manageability(id, user.id, user.role)
+    if manageable is None:
+        raise_api_error(HTTPStatus.NOT_FOUND, "Sandbox container not found")
+    if not manageable:
         raise_api_error(HTTPStatus.FORBIDDEN, "No permission to access this sandbox container")
     status = await resolve_file_container_status(id)
     if status is None:
@@ -395,7 +388,7 @@ async def _require_running_container_access(id: int, action: str, user=None) -> 
         raise_api_error(HTTPStatus.BAD_REQUEST, f"Only running sandbox containers can {action}")
 
 
-async def handle_list_files(id: int, path: str, user=None) -> CommonResponse:
+async def handle_list_files(id: int, path: str, user: AuthUser) -> CommonResponse:
     await _require_running_container_access(id, "browse files", user=user)
     try:
         files = await list_container_files(id, path)
@@ -404,7 +397,7 @@ async def handle_list_files(id: int, path: str, user=None) -> CommonResponse:
     return CommonResponse(data=ListContainerFilesResponse(path=path, files=files))
 
 
-async def handle_read_file(id: int, path: str, base64_mode: bool = False, user=None) -> CommonResponse:
+async def handle_read_file(id: int, path: str, user: AuthUser, base64_mode: bool = False) -> CommonResponse:
     await _require_running_container_access(id, "read files", user=user)
     try:
         info = await get_container_file_info(id, path)
@@ -425,7 +418,7 @@ async def handle_read_file(id: int, path: str, base64_mode: bool = False, user=N
     ))
 
 
-async def handle_write_file(id: int, body: ContainerFileWriteRequest, user=None) -> CommonResponse:
+async def handle_write_file(id: int, body: ContainerFileWriteRequest, user: AuthUser) -> CommonResponse:
     await _require_running_container_access(id, "write files", user=user)
     try:
         ok = await write_container_file(id, body.path, body.content)
@@ -441,7 +434,7 @@ async def handle_upload_files(
     path: str,
     files: list[UploadFile],
     overwrite: bool,
-    user=None,
+    user: AuthUser,
 ) -> CommonResponse:
     await _require_running_container_access(id, "upload files", user=user)
     if not files:
@@ -459,7 +452,7 @@ async def handle_upload_files(
     )
 
 
-async def handle_download_files(id: int, paths: list[str], user=None) -> StreamingResponse:
+async def handle_download_files(id: int, paths: list[str], user: AuthUser) -> StreamingResponse:
     await _require_running_container_access(id, "download files", user=user)
     if not paths:
         raise_api_error(HTTPStatus.BAD_REQUEST, "Download path is required")
@@ -481,7 +474,7 @@ async def handle_download_files(id: int, paths: list[str], user=None) -> Streami
     )
 
 
-async def handle_copy_files(id: int, body: ContainerFileCopyRequest, user=None) -> CommonResponse:
+async def handle_copy_files(id: int, body: ContainerFileCopyRequest, user: AuthUser) -> CommonResponse:
     await _require_running_container_access(id, "copy files", user=user)
     try:
         ok = await copy_container_files(id, body.sources, body.destination)
@@ -492,7 +485,7 @@ async def handle_copy_files(id: int, body: ContainerFileCopyRequest, user=None) 
     return CommonResponse(message="Files copied")
 
 
-async def handle_move_files(id: int, body: ContainerFileMoveRequest, user=None) -> CommonResponse:
+async def handle_move_files(id: int, body: ContainerFileMoveRequest, user: AuthUser) -> CommonResponse:
     await _require_running_container_access(id, "move files", user=user)
     try:
         ok = await move_container_files(id, body.sources, body.destination)
@@ -503,7 +496,7 @@ async def handle_move_files(id: int, body: ContainerFileMoveRequest, user=None) 
     return CommonResponse(message="Files moved")
 
 
-async def handle_delete_files(id: int, body: ContainerFileDeleteRequest, user=None) -> CommonResponse:
+async def handle_delete_files(id: int, body: ContainerFileDeleteRequest, user: AuthUser) -> CommonResponse:
     await _require_running_container_access(id, "delete files", user=user)
     try:
         ok = await delete_container_files(id, body.paths)
@@ -514,7 +507,7 @@ async def handle_delete_files(id: int, body: ContainerFileDeleteRequest, user=No
     return CommonResponse(message="Files deleted")
 
 
-async def handle_mkdir(id: int, body: ContainerFileMkdirRequest, user=None) -> CommonResponse:
+async def handle_mkdir(id: int, body: ContainerFileMkdirRequest, user: AuthUser) -> CommonResponse:
     await _require_running_container_access(id, "create directories", user=user)
     try:
         ok = await create_container_directory(id, body.path)
@@ -546,7 +539,7 @@ def _raise_container_file_operation_error(error: Exception, container_id: int, o
 async def handle_novnc_http_proxy(id: int, path: str, token: str, cookie_token: str = "") -> FastAPIResponse:
     effective_token = token or cookie_token
     user = await authenticate_ws_token(effective_token)
-    if user is None or not await _can_access_container_by_id(user, id):
+    if user is None or not await _can_manage_container(user, id):
         return FastAPIResponse(status_code=HTTPStatus.NOT_FOUND.value, content="Not found")
 
     target = await resolve_novnc_target(id)
@@ -589,7 +582,7 @@ async def handle_novnc_ws_proxy(websocket: WebSocket, id: int, token: str) -> No
         await websocket.close(code=ws_status.WS_1008_POLICY_VIOLATION)
         return
 
-    if not await _can_access_container_by_id(user, id):
+    if not await _can_manage_container(user, id):
         await websocket.close(code=ws_status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -663,7 +656,7 @@ async def _guard_container_websocket_access(websocket: WebSocket, id: int, user:
     ):
         await asyncio.sleep(_WEBSOCKET_ACCESS_CHECK_INTERVAL_SECONDS)
         resolved_user = await resolve_current_user(current_user)
-        if resolved_user is None or not await _can_access_container_by_id(resolved_user, id):
+        if resolved_user is None or not await _can_manage_container(resolved_user, id):
             await _close_silently(websocket, ws_status.WS_1008_POLICY_VIOLATION)
             return
         current_user = resolved_user

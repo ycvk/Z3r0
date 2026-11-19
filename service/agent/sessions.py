@@ -2,7 +2,7 @@ import asyncio
 from uuid import uuid4
 
 from pydantic import TypeAdapter
-from sqlalchemy import delete, exists, func, text
+from sqlalchemy import delete, func, text
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -16,11 +16,11 @@ from database import get_async_session
 from logger import get_logger
 from model.agent.sessions import AgentSessionMeta
 from model.system_user.users import SystemUser
-from model.work_project.projects import WorkProject, WorkProjectOwner
 from schema.agent.events import AgentContentEventSchema
 from schema.agent.sessions import AgentSessionSummarySchema, SessionType
 from schema.system_user.users import SystemUserRole
 from service.agent.session_state import get_session_meta, mark_sessions_stopped
+from service.common.access import agent_session_scope, can_access_agent_session, can_access_agent_session_in_tx
 from service.common.pagination import Page, paginate_statement
 from service.system_user.locking import lock_system_user_lifecycle
 from utils.sdk_tables import agent_messages, agent_sessions
@@ -72,7 +72,7 @@ async def update_session_title(
 ) -> AgentSessionSummarySchema | None:
     async with get_async_session() as session:
         meta = await session.get(AgentSessionMeta, session_id)
-        if meta is None or not await _can_access_meta(session, meta, user_id, user_role):
+        if meta is None or not await can_access_agent_session_in_tx(session, meta, user_id, user_role):
             return None
         meta.title = title
         session.add(meta)
@@ -93,7 +93,7 @@ async def ensure_chat_session_meta(
 
     async with get_async_session() as session:
         meta = await session.get(AgentSessionMeta, session_id)
-        if meta is None or not await _can_access_meta(session, meta, user_id, user_role):
+        if meta is None or not await can_access_agent_session_in_tx(session, meta, user_id, user_role):
             raise PermissionError("Agent session not found")
         existing = meta.agent_code if meta and meta.agent_code in valid else None
         resolved = override or existing or DEFAULT_AGENT_CODE
@@ -132,9 +132,8 @@ async def session_summary(
     user_id: int,
     user_role: SystemUserRole,
 ) -> AgentSessionSummarySchema | None:
-    async with get_async_session() as session:
-        if not await _can_access_session(session, session_id, user_id, user_role):
-            return None
+    if not await can_access_agent_session(session_id, user_id, user_role):
+        return None
     return await _session_summary_by_id(session_id)
 
 
@@ -150,20 +149,11 @@ async def _list_sessions(
         agent_sessions.c.updated_at.desc(),
         agent_sessions.c.session_id.desc(),
     )
-    stmt = stmt.where(meta_table.c.session_type != SessionType.FLOW)
-    if project_id is None:
-        stmt = stmt.where(
-            meta_table.c.project_id.is_(None),
-            meta_table.c.owner_id == user_id,
-        )
-    else:
-        stmt = stmt.where(meta_table.c.project_id == project_id)
-        if user_role != SystemUserRole.ADMIN:
-            stmt = stmt.where(
-                exists()
-                .where(WorkProjectOwner.project_id == project_id)
-                .where(WorkProjectOwner.user_id == user_id)
-            )
+    stmt = stmt.where(
+        meta_table.c.session_type != SessionType.FLOW,
+        meta_table.c.project_id.is_(None) if project_id is None else meta_table.c.project_id == project_id,
+        agent_session_scope(user_id, user_role),
+    )
 
     page_result = await paginate_statement(stmt, page=page, size=size)
     rows = page_result.items
@@ -258,7 +248,7 @@ async def update_session_sandbox_container(
 ) -> AgentSessionSummarySchema | None:
     async with get_async_session() as session:
         meta = await session.get(AgentSessionMeta, session_id)
-        if meta is None or not await _can_access_meta(session, meta, user_id, user_role):
+        if meta is None or not await can_access_agent_session_in_tx(session, meta, user_id, user_role):
             return None
         meta.selected_sandbox_container_id = sandbox_container_id
         meta.selected_sandbox_container_generation = sandbox_container_generation
@@ -295,9 +285,8 @@ async def replay_session_events_page(
     and seq), so replay is a straight read + validate — no SDK-message
     derivation, identity remapping, or content-based de-duplication.
     """
-    async with get_async_session() as session:
-        if not await _can_access_session(session, session_id, user_id, user_role):
-            return None
+    if not await can_access_agent_session(session_id, user_id, user_role):
+        return None
 
     await get_agent_pool().flush_timeline(session_id)
 
@@ -317,11 +306,6 @@ async def replay_session_events_page(
     return events, has_more, next_before_seq
 
 
-async def can_access_session(session_id: str, user_id: int, user_role: SystemUserRole) -> bool:
-    async with get_async_session() as session:
-        return await _can_access_session(session, session_id, user_id, user_role)
-
-
 async def get_accessible_session_meta(
     session_id: str,
     user_id: int,
@@ -329,7 +313,7 @@ async def get_accessible_session_meta(
 ) -> AgentSessionMeta | None:
     async with get_async_session() as session:
         meta = await session.get(AgentSessionMeta, session_id)
-        if meta is None or not await _can_access_meta(session, meta, user_id, user_role):
+        if meta is None or not await can_access_agent_session_in_tx(session, meta, user_id, user_role):
             return None
         return meta
 
@@ -351,7 +335,7 @@ async def delete_session(
 
     async with get_async_session() as session:
         meta = await session.get(AgentSessionMeta, session_id)
-        if meta is None or not await _can_access_meta(session, meta, user_id, user_role):
+        if meta is None or not await can_access_agent_session_in_tx(session, meta, user_id, user_role):
             return False
         if meta.project_id is not None and not allow_project_session:
             return False
@@ -364,7 +348,7 @@ async def delete_session(
             .where(AgentSessionMeta.session_id == session_id)
             .with_for_update()
         )).first()
-        if meta is None or not await _can_access_meta(session, meta, user_id, user_role):
+        if meta is None or not await can_access_agent_session_in_tx(session, meta, user_id, user_role):
             return False
         if meta.project_id is not None and not allow_project_session:
             return False
@@ -435,33 +419,6 @@ async def ensure_sdk_session_row(session: AsyncSession, session_id: str) -> None
         ),
         {"sid": session_id},
     )
-
-
-async def _can_access_session(
-    session: AsyncSession,
-    session_id: str,
-    user_id: int,
-    user_role: SystemUserRole,
-) -> bool:
-    meta = await session.get(AgentSessionMeta, session_id)
-    return meta is not None and await _can_access_meta(session, meta, user_id, user_role)
-
-
-async def _can_access_meta(
-    session: AsyncSession,
-    meta: AgentSessionMeta,
-    user_id: int,
-    user_role: SystemUserRole,
-) -> bool:
-    if meta.session_type == SessionType.FLOW and user_role == SystemUserRole.ADMIN:
-        return True
-    if meta.project_id is None:
-        return meta.owner_id == user_id
-    if await session.get(WorkProject, meta.project_id) is None:
-        return False
-    if user_role == SystemUserRole.ADMIN:
-        return True
-    return await session.get(WorkProjectOwner, (meta.project_id, user_id)) is not None
 
 
 def _resolve_title(meta: AgentSessionMeta | None) -> str:

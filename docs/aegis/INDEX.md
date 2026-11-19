@@ -8,3 +8,4 @@
 - [Flow Runtime Implementation Plan](plans/2026-08-25-flow-runtime.md) — plan — 2026-08-25
 - [ADR-0001 Flow is a separate aggregate](adr/ADR-0001-flow-is-a-separate-aggregate.md) — adr — 2026-08-26
 - [ADR-0002 Backend layer direction and guardrails](adr/ADR-0002-backend-layer-direction-and-guardrails.md) — adr — 2026-11-19
+- [ADR-0003 Access decisions live in one module](adr/ADR-0003-access-decisions-in-one-module.md) — adr — 2026-11-19

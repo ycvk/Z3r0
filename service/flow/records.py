@@ -24,14 +24,14 @@ from schema.flow.flows import (
     FlowSummarySchema,
 )
 from schema.sandbox.containers import SandboxContainerStatus
-from schema.system_user.users import SystemUserRole
 from schema.agent.sessions import SessionType
 from service.agent import runtime as agent_runtime
 from service.agent import credentials as agent_credentials
 from service.agent import sessions as agent_sessions
+from service.common.access import can_access_flow, can_manage_sandbox_container, flow_scope
 from service.common.pagination import Page, paginate_statement
 from service.flow.locking import lock_flow_by_public_id
-from service.sandbox.records import load_sandbox_container_record, sandbox_container_can_manage
+from service.sandbox.records import load_sandbox_container_record
 from service.work_project.projects import get_work_project_for_user
 
 
@@ -119,10 +119,6 @@ def to_summary(flow: Flow, *, meta: AgentSessionMeta | None = None) -> FlowSumma
     )
 
 
-def _can_access_flow(flow: Flow, user: AuthUser) -> bool:
-    return user.role == SystemUserRole.ADMIN or flow.owner_id == user.id
-
-
 async def _load_subtasks(flow_id: int) -> list[FlowSubtask]:
     async with get_async_session() as session:
         result = await session.exec(
@@ -142,7 +138,7 @@ async def _schema_for(flow: Flow) -> FlowSchema:
 
 async def create_flow(request: CreateFlowRequest, user: AuthUser) -> FlowSchema:
     record = await load_sandbox_container_record(request.sandbox_container_id)
-    if record is None or not sandbox_container_can_manage(record.container, user.id, user.role):
+    if record is None or not can_manage_sandbox_container(record.container, user.id, user.role):
         raise FlowValidationError("sandbox container not found")
     if record.container.status != SandboxContainerStatus.RUNNING:
         raise FlowValidationError("sandbox container is not running")
@@ -199,9 +195,11 @@ async def create_flow(request: CreateFlowRequest, user: AuthUser) -> FlowSchema:
 
 
 async def list_flows(user: AuthUser, page: int, size: int) -> Page[FlowSummarySchema]:
-    stmt = select(Flow).order_by(col(Flow.updated_at).desc(), col(Flow.id).desc())
-    if user.role != SystemUserRole.ADMIN:
-        stmt = stmt.where(Flow.owner_id == user.id)
+    stmt = (
+        select(Flow)
+        .where(flow_scope(user.id, user.role))
+        .order_by(col(Flow.updated_at).desc(), col(Flow.id).desc())
+    )
     page_result = await paginate_statement(stmt, page=page, size=size)
     metas: dict[str, AgentSessionMeta] = {}
     if page_result.items:
@@ -222,7 +220,7 @@ async def list_flows(user: AuthUser, page: int, size: int) -> Page[FlowSummarySc
 async def get_flow(public_id: str, user: AuthUser) -> FlowSchema | None:
     async with get_async_session() as session:
         flow = (await session.exec(select(Flow).where(Flow.public_id == public_id))).one_or_none()
-    if flow is None or not _can_access_flow(flow, user):
+    if flow is None or not can_access_flow(flow, user.id, user.role):
         return None
     return await _schema_for(flow)
 
@@ -230,7 +228,7 @@ async def get_flow(public_id: str, user: AuthUser) -> FlowSchema | None:
 async def cancel_flow(public_id: str, user: AuthUser) -> FlowSchema | None:
     async with get_async_session() as session:
         flow = await lock_flow_by_public_id(session, public_id)
-        if flow is None or not _can_access_flow(flow, user):
+        if flow is None or not can_access_flow(flow, user.id, user.role):
             return None
         if flow.status not in FLOW_TERMINAL_STATUSES:
             flow.status = FlowStatus.CANCELLED
@@ -272,7 +270,7 @@ async def add_flow_credential(
     user: AuthUser,
 ) -> FlowSchema | None:
     flow = await load_flow_row(public_id)
-    if flow is None or not _can_access_flow(flow, user):
+    if flow is None or not can_access_flow(flow, user.id, user.role):
         return None
     await agent_credentials.upsert_credential(
         owner_id=user.id,
@@ -293,7 +291,7 @@ async def remove_flow_credential(
     user: AuthUser,
 ) -> FlowSchema | None:
     flow = await load_flow_row(public_id)
-    if flow is None or not _can_access_flow(flow, user):
+    if flow is None or not can_access_flow(flow, user.id, user.role):
         return None
     deleted = await agent_credentials.delete_credential(
         credential_id,

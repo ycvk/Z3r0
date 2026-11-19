@@ -19,6 +19,7 @@ from schema.agent.events import AgentEventSchema, AgentInputPart
 from schema.agent.sessions import AgentSessionSummarySchema, SessionType
 from service.agent import sessions as agent_sessions
 from service.agent.session_state import get_session_meta, has_outstanding_session_work
+from service.common.access import can_access_agent_session
 from service.sandbox.commands import execute_sandbox_container_command
 from service.sandbox.status import (
     resolve_project_sandbox_container_selection,
@@ -232,7 +233,7 @@ async def cancel_all_tasks(*, session_id: str, user: AuthUser) -> list[AgentEven
 
 
 async def _raise_unless_can_access(session_id: str, user: AuthUser) -> None:
-    if not await agent_sessions.can_access_session(session_id, user.id, user.role):
+    if not await can_access_agent_session(session_id, user.id, user.role):
         raise PermissionError("Agent session not found")
 
 

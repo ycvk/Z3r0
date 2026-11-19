@@ -9,6 +9,7 @@ All notable changes to Z3r0 are documented in this file.
 - Added a CI workflow that runs `ruff`, the import-layer contract, `basedpyright`, the PostgreSQL-backed test suite, the `sandbox-proxy` checks, sandbox skill validation, the API contract sync check, and the frontend builds.
 - Added an import-layer contract (`lint-imports`) for the backend packages and a `basedpyright` baseline so that only new type errors fail the check.
 - Added a test that runs a chat turn end to end against a stub model server.
+- Added an access matrix test that drives every list and record endpoint as an admin and two users.
 
 ### Changed
 
@@ -17,6 +18,8 @@ All notable changes to Z3r0 are documented in this file.
 - Moved the agent tools from `core/tools` to the top-level `tools` package, above `service` in the layer order. `tools/catalog.py` declares the chat and Flow tool mounts of every agent.
 - Moved the Flow controller and the work project turn context from `core` to `service`, and the notification queue, timeline event log, subagent task records, and sandbox async job records from `service` to `core`.
 - `core` no longer imports `service`. The agent runtime reaches session run state, turn context, sandbox command execution, and main-agent wake-up through `RuntimePorts` in `core/runtime/ports.py`; `app.py` installs them with the tool catalog at startup.
+- Gathered the access rules for work projects, sandbox containers, agent sessions, Flows, and traffic in `service/common/access.py`. `router` and `handler` no longer import `model`.
+- The sandbox container file endpoints answer 404 for a container that does not exist, as the other container endpoints do. A non-admin user previously received 403.
 
 ### Fixed
 

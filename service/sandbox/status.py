@@ -13,6 +13,7 @@ from model.sandbox.containers import SandboxContainer
 from model.work_project.projects import WorkProject
 from schema.sandbox.containers import SandboxContainerStatus
 from schema.system_user.users import SystemUserRole
+from service.common.access import can_manage_sandbox_container
 from service.sandbox.docker_ops import (
     DockerContainerState,
     docker_status_to_sandbox_status,
@@ -273,10 +274,7 @@ async def resolve_sandbox_container_tool_binding(
 ) -> SandboxContainerToolBinding | None:
     return await _resolve_sandbox_container_tool_binding(
         id=id,
-        can_use=lambda container: (
-            user_role == SystemUserRole.ADMIN
-            or container.owner_id == user_id
-        ),
+        can_use=lambda container: can_manage_sandbox_container(container, user_id, user_role),
         allow_project_bound=False,
     )
 
@@ -290,7 +288,7 @@ async def resolve_sandbox_container_selection(
         sandbox_container = await session.get(SandboxContainer, id)
         if sandbox_container is None:
             return None
-        if user_role != SystemUserRole.ADMIN and sandbox_container.owner_id != user_id:
+        if not can_manage_sandbox_container(sandbox_container, user_id, user_role):
             return None
         if await _sandbox_container_has_project_binding(session, id):
             return None

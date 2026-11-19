@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlmodel import col, select
 
 from app import create_app
 from database import get_async_session
@@ -16,12 +17,14 @@ from model.sandbox.containers import SandboxContainer
 from model.sandbox.images import SandboxImage
 from model.sandbox.traffic import SandboxTrafficEntry
 from model.system_user.users import SystemUser
+from model.agent.sessions import AgentSessionMeta
 from model.work_project.projects import WorkProject, WorkProjectOwner
 from schema.agent.sessions import SessionType
 from schema.flow.flows import FlowStatus
 from schema.sandbox.containers import SandboxContainerStatus
 from schema.system_user.users import SystemUserRole
 from service.agent import sessions as agent_sessions
+from service.common import access
 from tests.conftest import auth_headers
 
 
@@ -213,7 +216,7 @@ async def test_sandbox_containers_are_managed_by_their_owner_and_admins(api: tup
     assert await http.statuses("GET", files.format(containers["bob"]), path="/") == {
         "admin": ALLOWED_BUT_STOPPED, "alice": 403, "bob": ALLOWED_BUT_STOPPED,
     }
-    assert await http.statuses("GET", files.format(MISSING_ID), path="/") == {"admin": 404, "alice": 403, "bob": 403}
+    assert await http.statuses("GET", files.format(MISSING_ID), path="/") == {"admin": 404, "alice": 404, "bob": 404}
 
     assert await http.status("bob", "POST", f"/api/sandbox-containers/{containers['alice']}/stop") == 403
     assert await http.status("bob", "POST", f"/api/sandbox-containers/{containers['shared']}/stop") == 403
@@ -285,3 +288,36 @@ async def test_traffic_is_visible_through_the_container_or_its_project(api: tupl
     }
     assert await http.statuses("GET", f"/api/traffic/{traffic['shared']}") == {"admin": 200, "alice": 200, "bob": 200}
     assert await http.statuses("GET", f"/api/traffic/{traffic['alice']}") == {"admin": 200, "alice": 200, "bob": 404}
+
+
+@pytest.mark.asyncio
+async def test_list_scopes_agree_with_the_checks_on_single_records(api: tuple[_Api, World]) -> None:
+    _, world = api
+    async with get_async_session() as session:
+        projects = (await session.exec(select(WorkProject))).all()
+        containers = (await session.exec(select(SandboxContainer))).all()
+        sessions = (await session.exec(select(AgentSessionMeta))).all()
+        flows = (await session.exec(select(Flow))).all()
+        entries = (await session.exec(select(SandboxTrafficEntry))).all()
+
+        async def scoped(column: Any, scope: Any) -> set[Any]:
+            return set((await session.exec(select(column).where(scope))).all())
+
+        assert projects and containers and sessions and flows and entries
+        for user in world.users.values():
+            who = (user.id or 0, user.role)
+            assert await scoped(col(WorkProject.id), access.work_project_scope(*who)) == {
+                row.id for row in projects if await access.can_access_work_project(row.id or 0, *who)
+            }
+            assert await scoped(col(SandboxContainer.id), access.sandbox_container_scope(*who)) == {
+                row.id for row in containers if access.can_manage_sandbox_container(row, *who)
+            }
+            assert await scoped(col(AgentSessionMeta.session_id), access.agent_session_scope(*who)) == {
+                row.session_id for row in sessions if await access.can_access_agent_session(row.session_id, *who)
+            }
+            assert await scoped(col(Flow.id), access.flow_scope(*who)) == {
+                row.id for row in flows if access.can_access_flow(row, *who)
+            }
+            assert await scoped(col(SandboxTrafficEntry.id), access.traffic_entry_scope(*who)) == {
+                row.id for row in entries if await access.can_view_traffic_entry(row, *who)
+            }
