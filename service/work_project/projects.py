@@ -42,6 +42,7 @@ from service.common.access import (
     work_project_scope,
 )
 from service.common.pagination import Page, paginate_statement
+from service.flow.lifecycle import delete_work_project_flows
 from service.sandbox.egress import sandbox_egress_label
 from service.sandbox.records import sandbox_container_schema
 from service.sandbox.status import status_generation
@@ -200,6 +201,7 @@ async def delete_work_project(id: int) -> None:
         )).all())
         await session.commit()
 
+    await delete_work_project_flows(id)
     for session_id in session_ids:
         await delete_session(
             session_id,

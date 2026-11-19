@@ -225,7 +225,7 @@ export function FlowWorkspacePage() {
   };
 
   const handleClearTraffic = async () => {
-    if (!flow) return;
+    if (!flow || flow.sandbox_container_id == null) return;
     try {
       await clearTraffic({
         sandbox_container_id: flow.sandbox_container_id,
@@ -296,10 +296,21 @@ export function FlowWorkspacePage() {
                     { label: "5xx", value: "5xx" },
                   ]}
                 />
-                <Button icon={<RefreshCw size={14} />} onClick={() => void loadTraffic(flow.sandbox_container_id, flow.project_id)}>
+                <Button
+                  icon={<RefreshCw size={14} />}
+                  disabled={flow.sandbox_container_id == null}
+                  onClick={() => {
+                    if (flow.sandbox_container_id != null) void loadTraffic(flow.sandbox_container_id, flow.project_id);
+                  }}
+                >
                   Filter
                 </Button>
-                <Button type="danger" icon={<Trash2 size={14} />} onClick={() => void handleClearTraffic()}>
+                <Button
+                  type="danger"
+                  icon={<Trash2 size={14} />}
+                  disabled={flow.sandbox_container_id == null}
+                  onClick={() => void handleClearTraffic()}
+                >
                   Clear
                 </Button>
               </div>

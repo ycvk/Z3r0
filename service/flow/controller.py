@@ -20,6 +20,13 @@ from service.agent.reports import export_session_report, latest_report_id_for_se
 from service.agent.runtime import submit_turn
 from service.agent.session_state import get_session_meta, has_outstanding_session_work
 from service.flow import records as flow_records
+from service.flow.runs import (
+    cancel_all_flow_runs,
+    flow_run_is_active,
+    forget_flow_run,
+    track_flow_run,
+    wait_for_flow_input,
+)
 from service.system_user.users import query_system_user_by_id
 
 
@@ -31,10 +38,7 @@ _PLANNING_ATTEMPTS = 2
 _SUBTASK_ATTEMPTS = 2
 
 _started = False
-_tasks: dict[str, asyncio.Task[None]] = {}
 _pending: list[str] = []
-_input_events: dict[str, asyncio.Event] = {}
-_input_text: dict[str, str] = {}
 
 
 def schedule_flow(public_id: str) -> None:
@@ -48,10 +52,9 @@ def schedule_flow(public_id: str) -> None:
 
 
 def _spawn(public_id: str) -> None:
-    current = _tasks.get(public_id)
-    if current is not None and not current.done():
+    if flow_run_is_active(public_id):
         return
-    _tasks[public_id] = asyncio.create_task(_run_flow(public_id), name=f"flow-{public_id}")
+    track_flow_run(public_id, asyncio.create_task(_run_flow(public_id), name=f"flow-{public_id}"))
 
 
 async def start_flow_runtime() -> None:
@@ -66,35 +69,8 @@ async def start_flow_runtime() -> None:
 async def stop_flow_runtime() -> None:
     global _started
     _started = False
-    tasks = list(_tasks.values())
-    _tasks.clear()
-    for task in tasks:
-        task.cancel()
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
+    await cancel_all_flow_runs()
     logger.info("flow runtime stopped")
-
-
-async def cancel_scheduled_flow(public_id: str) -> None:
-    event = _input_events.get(public_id)
-    if event is not None:
-        event.set()
-    task = _tasks.get(public_id)
-    if task is not None and not task.done():
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
-
-async def submit_flow_input(public_id: str, text: str) -> None:
-    _input_text[public_id] = text
-    event = _input_events.get(public_id)
-    if event is None:
-        event = asyncio.Event()
-        _input_events[public_id] = event
-    event.set()
 
 
 async def _run_flow(public_id: str) -> None:
@@ -117,7 +93,7 @@ async def _run_flow(public_id: str) -> None:
             if flow_schema is None or flow_schema.status in FLOW_TERMINAL_STATUSES:
                 return
             if flow_schema.status == FlowStatus.WAITING:
-                answer = await _wait_for_input(public_id)
+                answer = await wait_for_flow_input(public_id)
                 if answer is None:
                     return
                 if is_guard_approval_reply(answer):
@@ -164,9 +140,7 @@ async def _run_flow(public_id: str) -> None:
         logger.exception("flow failed: %s", public_id)
         await flow_records.fail_flow_run(public_id, "Flow runtime failed.")
     finally:
-        _tasks.pop(public_id, None)
-        _input_events.pop(public_id, None)
-        _input_text.pop(public_id, None)
+        forget_flow_run(public_id)
 
 
 async def _plan(public_id: str, user: AuthUser) -> bool:
@@ -293,16 +267,6 @@ async def _wait_idle(session_id: str) -> None:
             return
         await asyncio.sleep(_IDLE_POLL_SECONDS)
     raise TimeoutError("flow turn idle timeout")
-
-
-async def _wait_for_input(public_id: str) -> str | None:
-    event = _input_events.get(public_id)
-    if event is None:
-        event = asyncio.Event()
-        _input_events[public_id] = event
-    await event.wait()
-    event.clear()
-    return _input_text.pop(public_id, None)
 
 
 def _with_goal(body: str, goal: str) -> str:

@@ -5,7 +5,7 @@ from datetime import datetime
 
 import docker
 from sqlalchemy import or_, update
-from sqlmodel import select
+from sqlmodel import col, select
 
 from core.errors import DomainError, ForbiddenError, NotFoundError, ValidationError
 from core.sandbox.command_jobs import cancel_sandbox_async_commands
@@ -13,11 +13,13 @@ from database import get_async_session
 from logger import get_logger
 from model.agent.sessions import AgentSessionMeta
 from model.egress_proxy.proxies import EgressProxy
+from model.flow.flows import Flow
 from model.host.hosts import ManagedHost
 from model.sandbox.containers import SandboxContainer
 from model.sandbox.images import SandboxImage
 from model.system_user.users import SystemUser
 from model.work_project.projects import WorkProject
+from schema.flow.flows import FLOW_TERMINAL_STATUSES
 from schema.sandbox.containers import (
     SandboxContainerEgressMode,
     SandboxContainerPortMapping,
@@ -438,6 +440,13 @@ async def delete_sandbox_container(id: int) -> None:
         sandbox_container = await session.get(SandboxContainer, id)
         if sandbox_container is None:
             raise NotFoundError("Sandbox container not found")
+        unfinished_flow = (await session.exec(
+            select(Flow.id)
+            .where(Flow.sandbox_container_id == id, col(Flow.status).not_in(FLOW_TERMINAL_STATUSES))
+            .limit(1)
+        )).first()
+        if unfinished_flow is not None:
+            raise ValidationError("Sandbox container is used by an active Flow")
         host = await session.get(ManagedHost, sandbox_container.host_id)
         container_hash = sandbox_container.container_hash
 

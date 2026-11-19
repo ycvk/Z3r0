@@ -3067,7 +3067,7 @@ export interface components {
             /** Report Id */
             report_id?: string | null;
             /** Sandbox Container Id */
-            sandbox_container_id: number;
+            sandbox_container_id?: number | null;
             /** Session Id */
             session_id: string;
             /** Started At */
@@ -3164,7 +3164,7 @@ export interface components {
             /** Public Id */
             public_id: string;
             /** Sandbox Container Id */
-            sandbox_container_id: number;
+            sandbox_container_id?: number | null;
             /** Started At */
             started_at?: string | null;
             status: components["schemas"]["FlowStatus"];
@@ -8050,6 +8050,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommonResponse_DeleteSandboxContainerResponse_"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
                 };
             };
             /** @description Unauthorized */

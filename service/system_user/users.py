@@ -21,6 +21,11 @@ from model.work_project.projects import WorkProjectOwner
 from schema.system_user.users import SystemUserRole
 from service.agent.sessions import cancel_sessions, delete_private_sessions_for_owner
 from service.common.pagination import Page, RESOURCE_PAGE_SIZE, paginate_statement
+from service.flow.lifecycle import (
+    cancel_project_flows_for_owner,
+    delete_private_flows_for_owner,
+    hand_over_project_flows_in_tx,
+)
 from service.system_user.locking import lock_system_user_lifecycle
 
 
@@ -108,10 +113,12 @@ async def delete_system_user(id: int) -> None:
             if reassignment is None:
                 raise ValidationError("Shared agent sessions require another project owner or administrator")
 
+        await cancel_project_flows_for_owner(id, "Flow operator was removed.")
         await cancel_sessions(
             list(reassignment),
             "Agent session operator was removed.",
         )
+        await delete_private_flows_for_owner(id)
         await delete_private_sessions_for_owner(id)
 
         async with get_async_session() as session:
@@ -146,6 +153,7 @@ async def delete_system_user(id: int) -> None:
             if reassignment is None:
                 raise ValidationError("Shared agent sessions require another project owner or administrator")
             await _apply_project_session_reassignment(session, reassignment)
+            await hand_over_project_flows_in_tx(session, id)
             await session.delete(system_user)
             await session.commit()
             break

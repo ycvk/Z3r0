@@ -341,7 +341,7 @@ async def delete_session(
         meta = await session.get(AgentSessionMeta, session_id)
         if meta is None or not await can_access_agent_session_in_tx(session, meta, user_id, user_role):
             return False
-        if meta.project_id is not None and not allow_project_session:
+        if not _deletable_on_its_own(meta, allow_project_session):
             return False
 
     await _teardown_session_runtime(session_id)
@@ -354,7 +354,7 @@ async def delete_session(
         )).first()
         if meta is None or not await can_access_agent_session_in_tx(session, meta, user_id, user_role):
             return False
-        if meta.project_id is not None and not allow_project_session:
+        if not _deletable_on_its_own(meta, allow_project_session):
             return False
         records_deleted = await _delete_session_records_in_tx(session, session_id)
         await session.commit()
@@ -362,6 +362,22 @@ async def delete_session(
     if records_deleted:
         logger.info("Agent session deleted: %s", session_id)
     return records_deleted
+
+
+def _deletable_on_its_own(meta: AgentSessionMeta, allow_project_session: bool) -> bool:
+    # a Flow's session exists for the Flow and is deleted with it
+    if meta.session_type == SessionType.FLOW:
+        return False
+    return meta.project_id is None or allow_project_session
+
+
+async def delete_flow_session(session_id: str) -> None:
+    """Delete the session of a Flow, which also deletes the Flow record; the Flow service calls this."""
+    await _teardown_session_runtime(session_id)
+    async with get_async_session() as session:
+        await _delete_session_records_in_tx(session, session_id)
+        await session.commit()
+    logger.info("Flow session deleted: %s", session_id)
 
 
 async def delete_session_for_user(
@@ -415,8 +431,8 @@ async def cancel_sessions(session_ids: list[str], reason: str) -> None:
 
 
 async def _delete_session_records_in_tx(session: AsyncSession, session_id: str) -> bool:
-    # one DELETE drops the SDK session row and the FK CASCADE chain takes care of
-    # agent_messages, agent_message_meta, agent_session_meta, and the session's credentials
+    # one DELETE drops the SDK session row and the FK CASCADE chain takes care of agent_messages,
+    # agent_message_meta, agent_session_meta, the session's credentials, and the Flow it belongs to
     result = await session.execute(
         delete(agent_sessions).where(agent_sessions.c.session_id == session_id)
     )

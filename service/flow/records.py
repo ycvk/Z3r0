@@ -34,6 +34,7 @@ from service.common.access import can_access_flow, can_access_work_project, can_
 from service.common.pagination import Page, paginate_statement
 from service.credential import credentials as credential_service
 from service.flow.locking import lock_flow_by_public_id
+from service.flow.runs import cancel_flow_run, submit_flow_input
 from service.sandbox.records import load_sandbox_container_record
 
 
@@ -173,12 +174,7 @@ async def create_flow(request: CreateFlowRequest, user: AuthUser) -> FlowSchema:
             await session.refresh(flow)
     except Exception:
         logger.exception("failed to persist flow after session create: %s", session_id)
-        await agent_sessions.delete_session(
-            session_id,
-            user_id=user.id,
-            user_role=user.role,
-            allow_project_session=request.project_id is not None,
-        )
+        await agent_sessions.delete_flow_session(session_id)
         raise
     logger.info("flow created: public_id=%s session=%s", public_id, session_id)
     from service.flow.controller import schedule_flow
@@ -238,8 +234,7 @@ async def cancel_flow(public_id: str, user: AuthUser) -> FlowSchema:
         else:
             await session.refresh(flow)
         session_id = flow.session_id
-    from service.flow.controller import cancel_scheduled_flow
-    await cancel_scheduled_flow(public_id)
+    await cancel_flow_run(public_id)
     clear_session_guard(session_id)
     await cancel_session_subagents(session_id)
     await cancel_session_async_sandbox_commands(session_id)
@@ -254,8 +249,7 @@ async def answer_flow_input(public_id: str, user: AuthUser, text: str) -> FlowSc
     flow = await get_flow(public_id, user)
     if flow.status != FlowStatus.WAITING:
         raise ValidationError("flow is not waiting")
-    from service.flow.controller import submit_flow_input
-    await submit_flow_input(public_id, text)
+    submit_flow_input(public_id, text)
     return await get_flow(public_id, user)
 
 

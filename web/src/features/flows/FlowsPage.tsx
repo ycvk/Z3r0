@@ -65,7 +65,7 @@ export function FlowsPage() {
     },
     {
       key: "sandbox", header: "Sandbox", width: "110px",
-      render: (flow) => flow.sandbox_container_id,
+      render: (flow) => flow.sandbox_container_id ?? "—",
     },
     {
       key: "project", header: "Project", width: "110px",

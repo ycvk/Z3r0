@@ -24,6 +24,7 @@ All notable changes to Z3r0 are documented in this file.
 - All resource endpoints addressed by id answer 404 when the resource is absent or the caller lacks access to it; 403 is reserved for role gates.
 - Moved the credentials vault into `credential` packages (`model`, `schema`, `service`) and captured traffic into `traffic` packages (`model`, `schema`, `service`, `handler`, `router`). An import contract keeps both services from importing the agent, Flow, and work project services.
 - A credential belongs to one vault: its work project, or its agent session outside a project. Migration `0002` moves existing credentials into their vault; project credentials report `session_id` as null.
+- A Flow is deleted with its session. Deleting a sandbox container is refused while an unfinished Flow uses it; a finished Flow stays and reports `sandbox_container_id` as null. The session endpoints answer 404 for the session of a Flow.
 
 ### Fixed
 
@@ -31,6 +32,7 @@ All notable changes to Z3r0 are documented in this file.
 - Fixed deleting a work project failing when its vault held credentials.
 - Fixed deleting a user failing after that user had saved a credential.
 - Fixed credentials remaining in the database after their session was deleted.
+- Fixed deleting a user, a work project, or a sandbox container failing when a Flow referred to it. A deleted user's Flows outside a work project are deleted, and those inside a work project pass to another owner.
 
 ## [0.3.1] - 2026-11-19
 

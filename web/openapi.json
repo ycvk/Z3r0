@@ -3454,8 +3454,15 @@
             "title": "Report Id"
           },
           "sandbox_container_id": {
-            "title": "Sandbox Container Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sandbox Container Id"
           },
           "session_id": {
             "title": "Session Id",
@@ -3505,7 +3512,6 @@
           "title",
           "goal",
           "status",
-          "sandbox_container_id",
           "session_id",
           "created_at",
           "updated_at"
@@ -3646,8 +3652,15 @@
             "type": "string"
           },
           "sandbox_container_id": {
-            "title": "Sandbox Container Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sandbox Container Id"
           },
           "started_at": {
             "anyOf": [
@@ -3684,7 +3697,6 @@
           "public_id",
           "title",
           "status",
-          "sandbox_container_id",
           "created_at",
           "updated_at"
         ],
@@ -12638,6 +12650,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Bad request"
           },
           "401": {
             "content": {

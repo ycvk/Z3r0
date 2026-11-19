@@ -56,7 +56,7 @@ class FlowSchema(BaseModel):
     title: str
     goal: str
     status: FlowStatus
-    sandbox_container_id: int
+    sandbox_container_id: int | None = None
     project_id: int | None = None
     session_id: str
     ask_question: str | None = None
@@ -80,7 +80,7 @@ class FlowSummarySchema(BaseModel):
     public_id: str
     title: str
     status: FlowStatus
-    sandbox_container_id: int
+    sandbox_container_id: int | None = None
     project_id: int | None = None
     llm_requests: int = 0
     input_tokens: int = 0

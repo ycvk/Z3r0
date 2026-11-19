@@ -215,7 +215,7 @@ router.add_api_route(
     delete_sandbox_container_route,
     methods=["DELETE"],
     response_model=CommonResponse[DeleteSandboxContainerResponse],
-    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERROR_RESPONSES, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
 )
 
 router.add_api_route(
