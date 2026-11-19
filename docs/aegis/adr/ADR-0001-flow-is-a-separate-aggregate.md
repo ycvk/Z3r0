@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-08-26`
-Owners: `core/flow/` (progression) · `service/flow/` (persistence)
+Owners: `service/flow/controller.py` (progression) · `service/flow/records.py` (persistence)
 
 ## Context
 
@@ -20,7 +20,7 @@ Flow is a separate aggregate from `AgentSession`.
 
 - Source of truth for plan, subtask status, `ask`/`done`, and Flow status is
   `flows` / `flow_subtasks`, owned by `service/flow/` and advanced only by
-  `core/flow/controller.py`.
+  `service/flow/controller.py`.
 - Each Flow binds one hidden `AgentSession` (`SessionType.FLOW`) for transcript
   and WebSocket. That session is excluded from Playground lists.
 - Flow status is never inferred from `AgentSessionMeta.is_running`.
