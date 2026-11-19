@@ -20,7 +20,9 @@ hero:
 
 features:
   - title: Multi-agent orchestration
-    details: A lead agent coordinates specialist agents for intelligence gathering, validation, code audit, reverse analysis, and cryptanalysis.
+    details: A lead agent coordinates specialist agents across interactive Playground sessions and autonomous Flows with token ledgers and a credentials vault.
+  - title: Command Guard and traffic capture
+    details: Destructive sandbox commands require one-shot operator confirmation, and HTTP/HTTPS proxy exchanges are captured and searchable by agents and operators.
   - title: Project evidence plane
     details: Work projects bind graph-targeted work items to authorized assets, work item-attributed evidence, validated findings, continuous attack paths, retest candidates, and lead review decisions.
   - title: Retrieval context plane

@@ -22,14 +22,15 @@ Enter the configured administrator account and password. After successful authen
 The system contains the following core modules:
 
 1. Playground: Provides session-based interaction and collaboration with the agent team.
-2. Work projects: Manages authorized scope, graph-targeted workflow, evidence, findings, attack paths, decisions, and sessions.
-3. Knowledge: Manages document ingestion, vector inspection, semantic retrieval, and knowledge graph exploration.
-4. Host management: Manages host nodes and orchestrates the runtime environment for sandbox containers.
-5. Egress proxies: Manages unified network egress through HTTP, HTTPS, and SOCKS5 proxies.
-6. Sandbox images: Manages customized sandbox images, including the default image with sandbox-local skills and preloaded security tooling.
-7. Sandbox containers: Orchestrates runnable sandbox containers with command execution, files, noVNC/browser review, and egress configuration.
-8. System users: Manages system users, roles, and related identity information.
-9. System config: Manages agent runtime, agent models, independent LightRAG embedding and extraction configuration, and the optional FOFA asset-search integration.
+2. Flows: Launches autonomous goal-driven runs against a running sandbox with subtask tracking, credentials vault, live HTTP/HTTPS traffic review, token accounting, and Markdown reports.
+3. Work projects: Manages authorized scope, graph-targeted workflow, evidence, findings, attack paths, decisions, and sessions.
+4. Knowledge: Manages document ingestion, vector inspection, semantic retrieval, and knowledge graph exploration.
+5. Host management: Manages host nodes and orchestrates the runtime environment for sandbox containers.
+6. Egress proxies: Manages unified network egress through HTTP, HTTPS, and SOCKS5 proxies.
+7. Sandbox images: Manages customized sandbox images, including the default image with sandbox-local skills and preloaded security tooling.
+8. Sandbox containers: Orchestrates runnable sandbox containers with command execution, files, noVNC/browser review, and egress configuration.
+9. System users: Manages system users, roles, and related identity information.
+10. System config: Manages agent runtime, agent models, independent LightRAG embedding and extraction configuration, and the optional FOFA asset-search integration.
 
 ## Start working
 

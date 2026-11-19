@@ -22,8 +22,9 @@ The platform follows a specialist operating model: a lead agent governs scope, d
 | Capability | Description |
 | --- | --- |
 | Multi-agent orchestration | A lead agent assigns work items to intelligence, penetration, code audit, reverse engineering, and cryptography specialists. |
+| Autonomous Flows | Goal-driven runs advance subtasks, pause on `ask` or Command Guard checkpoints, track token usage and credentials, and export Markdown reports. |
 | Graph-driven workflow | Each work item identifies in-scope assets, test surfaces, dependencies, completion criteria, and an optional relation, finding, or attack-path focus. |
-| Durable evidence chain | Immutable evidence references command output, HTTP exchanges, code locations, artifacts, external sources, and useful negative results. |
+| Durable evidence chain | Immutable evidence references command output, captured HTTP/HTTPS exchanges, code locations, artifacts, external sources, and useful negative results. |
 | Findings and attack paths | Findings separate validation from disposition; attack paths retain continuous, evidence-backed steps from entry to target. |
 | Replayable runtime | Normalized session events support live streaming, interruption, long-running work, recovery, and historical replay. |
 | Controlled execution | Managed Docker sandboxes provide shell, files, browser/noVNC, skills, preloaded tooling, and container-level egress policy. |

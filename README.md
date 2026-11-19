@@ -40,7 +40,7 @@ Z3r0 brings authorized scope, asset relationships, specialist assignments, evide
 ```mermaid
 flowchart TB
   Operator["Authorized operator"]
-  Workbench["React workbench<br/>Playground / work projects / sandboxes / egress"]
+  Workbench["React workbench<br/>Playground / Flows / work projects / sandboxes / egress"]
   API["FastAPI control plane<br/>REST + WebSocket"]
 
   subgraph Runtime["Agent runtime plane"]
@@ -99,10 +99,10 @@ Z3r0 separates the system into four architectural planes:
 
 | Plane | Scope |
 | --- | --- |
-| Control plane | Users, system configuration, agents, sessions, work projects, knowledge collections, managed hosts, sandbox images, sandbox containers, egress proxies, and optional FOFA asset-search integration. |
-| Runtime plane | Multi-agent session execution, task-input LightRAG retrieval, live event streaming, long-running task continuity, history projection, and timeline replay. |
+| Control plane | Users, system configuration, agents, sessions, autonomous Flows, work projects, knowledge collections, managed hosts, sandbox images, sandbox containers, egress proxies, and optional FOFA asset-search integration. |
+| Runtime plane | Multi-agent session execution, code-driven Flow progression, token usage ledgers, task credentials vault, command guard approvals, task-input LightRAG retrieval, live event streaming, and timeline replay. |
 | Evidence plane | Authorized scope, asset relationships, graph-targeted work items, immutable evidence, findings, attack paths, target coverage, and workflow decisions. |
-| Execution plane | Docker hosts, sandbox containers, shell/file/noVNC access, command execution, sandbox-local skills, built-in security tooling, and outbound network policy. |
+| Execution plane | Docker hosts, sandbox containers, shell/file/noVNC access, command execution, HTTP/HTTPS MITM traffic capture and search, sandbox-local skills, built-in security tooling, and outbound network policy. |
 
 This separation is reflected in the repository structure: routers and handlers expose application contracts, services own domain behavior, models define persistent state, and the React workbench consumes the stable REST/WebSocket surface.
 
@@ -212,13 +212,15 @@ Sandbox resources are managed infrastructure. Administrators manage Docker hosts
 
 The default sandbox image provides a focused security workspace with targeted DNS and ownership checks (`dnsx`, `dig`, `nslookup`, `whois`), low-volume HTTP inspection (`curl`, `wget`, `httpx`, `openssl`), focused service diagnostics (`nc`, `nmap`), local file and archive triage (`file`, `sha256sum`, `7z`, `unzip`, `tar`, `readelf`), Android and firmware analysis (`jadx`, `apktool`, Ghidra, `binwalk`), binary and pwn tooling (`gdb`, Pwndbg, `strace`, `ltrace`, `pwntools`, and the `pwntools`-provided `checksec`), browser automation through `agent-browser-cli`, and Python workflows through `uv`.
 
-Outbound traffic is normalized through a container-level egress profile. The sandbox runtime exports proxy environment variables to a local proxy inside the container; the control plane can update the upstream policy to direct access or a managed HTTP, HTTPS, or SOCKS5 proxy. This gives the platform a unified place to manage network identity, traffic routing, and operator-environment isolation.
+Outbound traffic is normalized through a container-level egress profile. The sandbox runtime exports proxy environment variables and trusts a container-local root CA so `sandbox-proxy` can route HTTP and HTTPS traffic, capture decrypted request/response exchanges for search and review, and forward upstream through direct access or a managed HTTP, HTTPS, SOCKS5, or Tor policy.
 
 ## Technical highlights
 
 | Highlight | Description |
 | --- | --- |
 | Multi-agent orchestration | A lead agent coordinates specialist agents for intelligence gathering, validation, code audit, reverse analysis, and cryptanalysis. |
+| Autonomous Flows | Operators launch goal-driven runs on `/flows` with code-owned subtask progression, `ask`/`done` checkpoints, token accounting, a credentials vault, and Markdown reports. |
+| Command Guard & traffic capture | Destructive sandbox commands pause for one-shot operator confirmation, while HTTP and HTTPS proxy exchanges are indexed for full-text search. |
 | Graph-driven operations | Work projects bind specialist work items to in-scope assets, test surfaces, evidence, findings, and attack-path validation. |
 | Retrieval context plane | Building knowledge graphs with LightRAG Core provides matching original document chunks and graph context for task-oriented inputs. |
 | Replayable event timeline | The UI consumes normalized timeline events that can be streamed live or loaded later as history. |

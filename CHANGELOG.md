@@ -2,11 +2,27 @@
 
 All notable changes to Z3r0 are documented in this file.
 
-## Unreleased
+## [0.3.0] - 2026-11-19
+
+### Added
+
+- Added the autonomous Flow runtime and `/flows` workbench with code-owned plan progression, subtasks, `ask`/`done` barriers, web search, command output excerpts, and downloadable Markdown reports.
+- Added session and Flow token ledgers tracking LLM request counts, input/output tokens, cached input tokens, and total token usage.
+- Added the persistent Credentials Vault (`save_credential`, `list_credentials`, and `/api/flows/{public_id}/credentials`) with automatic turn-context injection across sessions and work projects.
+- Added Command Guard interception for destructive shell, SQL, and HTTP operations with one-shot exact-command operator approval in Flow and chat sessions.
+- Added sandbox HTTP and MITM-decrypted HTTPS traffic capture in `sandbox-proxy` with background PostgreSQL synchronization, tenant-scoped `/api/traffic` endpoints, Flow workspace inspection, and `search_traffic` / `get_traffic_detail` agent tools.
+- Added optional configurable FOFA asset-search integration (`fofa_search`).
 
 ### Changed
 
-- Reduced the default sandbox network toolchain to targeted `dnsx`, `httpx`, and `nmap` workflows plus basic command-line diagnostics, and removed the other preloaded network automation with its skills.
+- Scoped the default sandbox network toolchain to targeted `dnsx`, `httpx`, and `nmap` workflows plus command-line diagnostics.
+- Standardized English terminology, UI labels, and documentation across the control plane, runtime, and workbench.
+
+### Fixed
+
+- Enforced container and work project ownership checks across traffic listing, detail, ingest, and clear operations.
+- Allocated sandbox control proxy ports from live Docker port bindings, normalized naive evidence timestamps, and retried transient model request failures.
+- Rendered closed Mermaid diagrams during live message streaming and cut Playground idle GPU load.
 
 ## [0.2.2] - 2026-07-21
 
