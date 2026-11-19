@@ -1,11 +1,12 @@
 import asyncio
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
 from sqlmodel import select
 
+from core.runtime.session import get_agent_pool
 from database import get_async_session
 from logger import get_logger
 from model.host.hosts import ManagedHost
@@ -36,8 +37,6 @@ _TOOL_BINDING_INSPECT_TTL_SECONDS = 3
 _status_monitor_task: asyncio.Task[None] | None = None
 _tool_invalidation_tasks: set[asyncio.Task[None]] = set()
 _tool_binding_state_cache: dict[int, "DockerStateCacheEntry"] = {}
-_AgentToolBindingInvalidator = Callable[[int | None], Awaitable[None]]
-_agent_tool_binding_invalidator: _AgentToolBindingInvalidator | None = None
 
 
 @dataclass(frozen=True)
@@ -55,11 +54,6 @@ class DockerStateCacheEntry:
     generation: int
     state: DockerContainerState
     expires_at: float
-
-
-def set_agent_tool_binding_invalidator(callback: _AgentToolBindingInvalidator | None) -> None:
-    global _agent_tool_binding_invalidator
-    _agent_tool_binding_invalidator = callback
 
 
 async def save_sandbox_container_status(
@@ -141,8 +135,7 @@ def _schedule_agent_tool_invalidation(container_id: int) -> None:
 async def invalidate_agent_tool_bindings(container_id: int) -> None:
     _clear_tool_binding_state_cache(container_id)
     try:
-        if _agent_tool_binding_invalidator is not None:
-            await _agent_tool_binding_invalidator(container_id)
+        await get_agent_pool().invalidate_tool_bindings(container_id)
     except Exception:
         logger.exception("Agent tool binding invalidation failed: %s", container_id)
 
@@ -152,8 +145,7 @@ async def _invalidate_all_agent_tool_bindings() -> None:
     if _tool_invalidation_tasks:
         await asyncio.gather(*tuple(_tool_invalidation_tasks), return_exceptions=True)
     try:
-        if _agent_tool_binding_invalidator is not None:
-            await _agent_tool_binding_invalidator(None)
+        await get_agent_pool().invalidate_tool_bindings(None)
     except Exception:
         logger.exception("Agent tool binding invalidation failed")
 

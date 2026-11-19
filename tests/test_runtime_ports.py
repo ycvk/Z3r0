@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 
 import pytest
 
-from core.runtime import ports
+from core.runtime import coordination, ports
 from core.runtime.context import AgentRuntimeContext, AgentUserContext, main_agent_instance_id
 from core.sandbox import async_jobs as sandbox_async_jobs
 from core.sandbox.command_jobs import start_async_sandbox_command, stop_async_sandbox_commands
@@ -28,6 +28,13 @@ def test_runtime_ports_must_be_installed_before_use(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(ports, "_ports", None)
     with pytest.raises(RuntimeError, match="Runtime ports are not installed"):
         ports.runtime_ports()
+
+
+@pytest.mark.asyncio
+async def test_runtime_coordination_must_be_installed_before_use(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(coordination, "_coordination", None)
+    with pytest.raises(RuntimeError, match="Runtime coordination is not installed"):
+        await coordination.cancel_session_subagents("any-session")
 
 
 @pytest.mark.asyncio

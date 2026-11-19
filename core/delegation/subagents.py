@@ -26,11 +26,7 @@ from core.runtime.context import (
     AgentRuntimeContext,
     subagent_instance_id,
 )
-from core.runtime.coordination import (
-    publish_agent_event,
-    set_subagent_cancel_handlers,
-    set_target_agent_resume_handler,
-)
+from core.runtime.coordination import publish_agent_event
 from core.runtime.event_log import persist_subagent_event_unpooled
 from core.runtime.input_items import build_turn_input_item, retrieval_text_from_content, text_input_content
 from core.runtime.notification_dispatch import forget_target_notifications, is_main_agent_instance
@@ -909,6 +905,3 @@ def _assistant_message_text(item: dict[str, Any]) -> str:
         return extract_message_text(item.get("content")).strip()
     return ""
 
-
-set_subagent_cancel_handlers(cancel_sandbox_subagent_runs, cancel_session_subagent_runs)
-set_target_agent_resume_handler(resume_target_instance)

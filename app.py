@@ -11,11 +11,18 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from config import ROOT_PATH, get_config
 
 from core.agent.registry import AgentRegistry
-from core.delegation.subagents import start_subagent_runtime, stop_subagent_runtime
+from core.delegation.subagents import (
+    cancel_sandbox_subagent_runs,
+    cancel_session_subagent_runs,
+    resume_target_instance,
+    start_subagent_runtime,
+    stop_subagent_runtime,
+)
 from core.errors import DomainError
 from core.lightrag.runtime import start_lightrag, stop_lightrag
+from core.runtime.coordination import RuntimeCoordination, install_runtime_coordination
 from core.runtime.ports import RuntimePorts, install_runtime_ports
-from core.runtime.session import AgentSessionPool, get_agent_pool, install_agent_pool
+from core.runtime.session import AgentSessionPool, get_agent_pool, install_agent_pool, publish_to_agent_pool
 from core.sandbox.command_jobs import start_async_sandbox_runtime, stop_async_sandbox_commands
 from database import close_engine, init_engine, migrate_database
 from logger import get_logger
@@ -57,7 +64,6 @@ from service.sandbox.files import close_file_http_client
 from service.sandbox.novnc import close_novnc_http_client
 from service.sandbox.status import (
     invalidate_all_agent_tool_bindings,
-    set_agent_tool_binding_invalidator,
     start_sandbox_container_status_monitor,
     stop_sandbox_container_status_monitor,
 )
@@ -107,13 +113,6 @@ async def _shutdown_step(name: str, operation: Callable[[], Awaitable[None]]) ->
         logger.exception("%s shutdown failed", name)
 
 
-async def _reset_agent_tool_bindings() -> None:
-    try:
-        await invalidate_all_agent_tool_bindings()
-    finally:
-        set_agent_tool_binding_invalidator(None)
-
-
 def install_agent_runtime() -> None:
     """Give the agent runtime its tool catalog and the services it calls."""
     set_tracing_disabled(True)
@@ -123,11 +122,13 @@ def install_agent_runtime() -> None:
         execute_sandbox_command=execute_sandbox_container_command,
         resume_main_agent_session=resume_main_agent_session,
     ))
+    install_runtime_coordination(RuntimeCoordination(
+        publish_agent_event=publish_to_agent_pool,
+        resume_target_agent_instance=resume_target_instance,
+        cancel_sandbox_subagents=cancel_sandbox_subagent_runs,
+        cancel_session_subagents=cancel_session_subagent_runs,
+    ))
     install_agent_pool(AgentSessionPool(AgentRegistry(AGENT_SPECS)))
-
-
-async def _invalidate_current_agent_tool_bindings(container_id: int | None) -> None:
-    await get_agent_pool().invalidate_tool_bindings(container_id)
 
 
 async def _stop_current_agent_pool() -> None:
@@ -192,8 +193,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
             shutdown_steps.append(("agent pool", _stop_current_agent_pool))
             await start_flow_runtime()
             shutdown_steps.append(("flow runtime", stop_flow_runtime))
-            set_agent_tool_binding_invalidator(_invalidate_current_agent_tool_bindings)
-            shutdown_steps.append(("agent tool bindings", _reset_agent_tool_bindings))
+            shutdown_steps.append(("agent tool bindings", invalidate_all_agent_tool_bindings))
 
             await recover_pending_sessions()
             await start_sandbox_container_status_monitor()

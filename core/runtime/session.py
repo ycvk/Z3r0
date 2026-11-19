@@ -18,11 +18,7 @@ from core.conversation.store import Z3r0Session
 from core.lightrag.runtime import activate_lightrag_context
 from core.runtime import notifications as agent_notifications
 from core.runtime.context import AgentRuntimeContext, main_agent_instance_id
-from core.runtime.coordination import (
-    cancel_sandbox_subagents,
-    cancel_session_subagents,
-    set_agent_event_publisher,
-)
+from core.runtime.coordination import cancel_sandbox_subagents, cancel_session_subagents
 from core.runtime.event_log import load_timeline_head
 from core.runtime.input_items import build_turn_input_item, display_text_from_content, retrieval_text_from_content
 from core.runtime.live_projection import LiveEventProjection
@@ -781,6 +777,11 @@ class AgentSessionPool:
         await entry.session.shutdown()
         logger.debug("Agent pool discarded session=%s", session_id)
 
+    async def is_running(self, session_id: str) -> bool:
+        async with self._lock:
+            entry = self._pool.get(session_id)
+        return entry is not None and entry.session.is_running()
+
     async def invalidate_session_tool_binding(self, session_id: str) -> None:
         async with self._lock:
             entry = self._pool.get(session_id)
@@ -1039,8 +1040,5 @@ def _next_turn_scope(context: AgentRuntimeContext) -> str:
     return next_segment_scope(owner)
 
 
-def _publish_to_current_pool(session_id: str, event: AgentEventSchema) -> bool:
+def publish_to_agent_pool(session_id: str, event: AgentEventSchema) -> bool:
     return get_agent_pool().publish(session_id, event)
-
-
-set_agent_event_publisher(_publish_to_current_pool)
