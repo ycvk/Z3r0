@@ -1,4 +1,4 @@
-"""The controller task and the pending operator input of every running Flow, by public id."""
+"""The controller task of every running Flow and the signal that wakes one waiting for input."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import asyncio
 
 _tasks: dict[str, asyncio.Task[None]] = {}
 _input_events: dict[str, asyncio.Event] = {}
-_input_text: dict[str, str] = {}
 
 
 def flow_run_is_active(public_id: str) -> bool:
@@ -22,7 +21,6 @@ def track_flow_run(public_id: str, task: asyncio.Task[None]) -> None:
 def forget_flow_run(public_id: str) -> None:
     _tasks.pop(public_id, None)
     _input_events.pop(public_id, None)
-    _input_text.pop(public_id, None)
 
 
 async def cancel_flow_run(public_id: str) -> None:
@@ -47,8 +45,7 @@ async def cancel_all_flow_runs() -> None:
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
-def submit_flow_input(public_id: str, text: str) -> None:
-    _input_text[public_id] = text
+def signal_flow_input(public_id: str) -> None:
     event = _input_events.get(public_id)
     if event is None:
         event = asyncio.Event()
@@ -56,11 +53,10 @@ def submit_flow_input(public_id: str, text: str) -> None:
     event.set()
 
 
-async def wait_for_flow_input(public_id: str) -> str | None:
+async def wait_for_flow_input_signal(public_id: str) -> None:
     event = _input_events.get(public_id)
     if event is None:
         event = asyncio.Event()
         _input_events[public_id] = event
     await event.wait()
     event.clear()
-    return _input_text.pop(public_id, None)

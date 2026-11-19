@@ -12,3 +12,4 @@
 - [ADR-0004 Domain errors and single-point HTTP mapping](adr/ADR-0004-domain-errors-and-http-mapping.md) — adr — 2026-11-19
 - [ADR-0005 Credentials and captured traffic are their own domains](adr/ADR-0005-credentials-and-traffic-are-their-own-domains.md) — adr — 2026-11-19
 - [ADR-0006 A Flow is deleted with its session](adr/ADR-0006-flow-deletion-rules.md) — adr — 2026-11-19
+- [ADR-0007 Runtime state is installed at startup or stored in the database](adr/ADR-0007-runtime-state-is-installed-or-stored.md) — adr — 2026-11-19

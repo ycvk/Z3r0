@@ -91,7 +91,7 @@ async def execute_sync_command(
     command_text = command.strip()
     if not command_text:
         return _error_result("Sandbox container command is required")
-    if reason := check_command_guard(command_text, session_id=ctx.context.session_id):
+    if reason := await check_command_guard(command_text, session_id=ctx.context.session_id):
         return _error_result(
             f"[Command Guard] High-risk command intercepted ({reason}): `{command_text}`. "
             "Ask the operator to reply ALLOW in chat before re-running this exact command."
@@ -151,7 +151,7 @@ async def execute_async_command(
     command_text = command.strip()
     if not command_text:
         return _error_result("Sandbox container command is required")
-    if reason := check_command_guard(command_text, session_id=ctx.context.session_id):
+    if reason := await check_command_guard(command_text, session_id=ctx.context.session_id):
         return _error_result(
             f"[Command Guard] High-risk command intercepted ({reason}): `{command_text}`. "
             "Ask the operator to reply ALLOW in chat before re-running this exact command."

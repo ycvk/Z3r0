@@ -207,7 +207,12 @@ async def test_command_guard_flow_and_playground_tools_acceptance(
     test_db: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    command_guard.reset_guard_state()
+    async with get_async_session() as session:
+        operator = SystemUser(role=SystemUserRole.USER, email="op@test.local", username="op")
+        session.add(operator)
+        await session.commit()
+        await session.refresh(operator)
+    guarded_session_id = await agent_sessions.create_session(operator.id or 0)
     executed: list[str] = []
 
     async def fake_start_async_cmd(**kwargs: object) -> None:
@@ -225,11 +230,11 @@ async def test_command_guard_flow_and_playground_tools_acceptance(
     monkeypatch.setattr("tools.sandbox.execute_sandbox_container_command", fake_exec_sync)
 
     ctx = AgentRuntimeContext(
-        session_id="sess-guard-e2e",
+        session_id=guarded_session_id,
         agent_code="cpe",
         agent_instance_id="inst-1",
         sandbox_container_id=1,
-        user=AgentUserContext(id=1, username="op", email="op@test.local", role=SystemUserRole.USER),
+        user=AgentUserContext(id=operator.id or 0, username="op", email="op@test.local", role=SystemUserRole.USER),
     )
 
     # 1. Flow terminal intercepts destructive command and sets ask barrier
@@ -250,7 +255,7 @@ async def test_command_guard_flow_and_playground_tools_acceptance(
     await _invoke_tool(terminal, ctx, command=dangerous)
     pop_barrier(ctx.session_id)
     assert command_guard.is_guard_approval_reply("允许")
-    assert command_guard.approve_pending_command(ctx.session_id) is True
+    assert await command_guard.approve_pending_command(ctx.session_id) is True
 
     # Unapproved destructive command is still blocked without invalidating the grant for `dangerous`
     other_res = await _invoke_tool(execute_sync_command, ctx, command="psql -c 'DROP TABLE audit_logs;'")

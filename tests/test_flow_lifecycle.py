@@ -9,7 +9,9 @@ from sqlmodel import col, select
 
 from app import create_app
 from core.errors import ValidationError
+from core.sandbox import command_guard
 from database import get_async_session
+from middleware.system_user import AuthUser
 from model.agent.sessions import AgentSessionMeta
 from model.flow.flows import Flow, FlowSubtask
 from model.host.hosts import ManagedHost
@@ -23,6 +25,7 @@ from schema.sandbox.containers import SandboxContainerStatus
 from schema.system_user.users import SystemUserRole
 from service.agent import sessions as agent_sessions
 from service.flow import controller as flow_controller
+from service.flow import records as flow_records
 from service.flow.runs import flow_run_is_active
 from service.sandbox import lifecycle
 from service.system_user.users import delete_system_user
@@ -204,13 +207,13 @@ async def test_deleting_a_flow_stops_its_controller(test_db: None, monkeypatch: 
     world = await _seed()
     await _start_flow(world, world.alice, "waiting", status=FlowStatus.WAITING)
     waiting = asyncio.Event()
-    wait_for_flow_input = flow_controller.wait_for_flow_input
+    wait_for_flow_input_signal = flow_controller.wait_for_flow_input_signal
 
-    async def signal_then_wait(public_id: str) -> str | None:
+    async def signal_then_wait(public_id: str) -> None:
         waiting.set()
-        return await wait_for_flow_input(public_id)
+        await wait_for_flow_input_signal(public_id)
 
-    monkeypatch.setattr(flow_controller, "wait_for_flow_input", signal_then_wait)
+    monkeypatch.setattr(flow_controller, "wait_for_flow_input_signal", signal_then_wait)
     await flow_controller.start_flow_runtime()
     try:
         await asyncio.wait_for(waiting.wait(), timeout=5)
@@ -222,3 +225,43 @@ async def test_deleting_a_flow_stops_its_controller(test_db: None, monkeypatch: 
         assert await _flows() == {}
     finally:
         await flow_controller.stop_flow_runtime()
+
+
+@pytest.mark.asyncio
+async def test_a_waiting_flow_resumes_after_a_restart_with_the_answer_and_the_approval(
+    test_db: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    world = await _seed()
+    session_id = await _start_flow(world, world.alice, "waiting", status=FlowStatus.WAITING)
+    dangerous = "curl -X DELETE https://api.target.local/users/42"
+    assert await command_guard.check_command_guard(dangerous, session_id=session_id) is not None
+    alice = AuthUser(
+        id=world.alice.id or 0, role=world.alice.role, email=world.alice.email, username=world.alice.username,
+    )
+
+    # No controller is running, as after a restart: the answer and the intercepted command are stored.
+    await flow_records.answer_flow_input("waiting", alice, "ALLOW")
+    assert (await _flows())["waiting"].pending_input == "ALLOW"
+
+    resumed = asyncio.Event()
+    prompts: list[str] = []
+
+    async def record_subtask(public_id: str, user: AuthUser, flow_session_id: str, prompt: str) -> bool:
+        prompts.append(prompt)
+        resumed.set()
+        return False
+
+    monkeypatch.setattr(flow_controller, "_run_subtask", record_subtask)
+    await flow_controller.start_flow_runtime()
+    try:
+        await asyncio.wait_for(resumed.wait(), timeout=5)
+    finally:
+        await flow_controller.stop_flow_runtime()
+
+    flow = (await _flows())["waiting"]
+    assert prompts == ["Operator answer:\nALLOW"]
+    assert (flow.status, flow.pending_input, flow.ask_question) == (FlowStatus.RUNNING, None, None)
+    # The approval given before the restart lets the exact command run once.
+    assert await command_guard.check_command_guard(dangerous, session_id=session_id) is None
+    assert await command_guard.check_command_guard(dangerous, session_id=session_id) is not None

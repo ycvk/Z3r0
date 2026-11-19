@@ -54,6 +54,7 @@ async def cancel_project_flows_for_owner(owner_id: int, reason: str) -> None:
             flow.status = FlowStatus.CANCELLED
             flow.error = reason
             flow.ask_question = None
+            flow.pending_input = None
             flow.finished_at = now
             flow.updated_at = now
             session.add(flow)

@@ -23,6 +23,8 @@ class Flow(SQLModel, table=True):
     project_id: int | None = Field(default=None, foreign_key="work_projects.id", index=True)
     session_id: str = Field(index=True, foreign_key="agent_sessions.session_id", ondelete="CASCADE")
     ask_question: str | None = Field(default=None)
+    # the operator's answer to ask_question until the controller takes it
+    pending_input: str | None = Field(default=None)
     report_id: str | None = Field(default=None)
     error: str = Field(default="")
     created_at: datetime = Field(default_factory=datetime.now)

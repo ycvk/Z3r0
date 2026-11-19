@@ -15,7 +15,13 @@ from core.sandbox.command_guard import (
 from logger import get_logger
 from middleware.system_user import AuthUser
 from schema.agent.events import AgentTextInputPart
-from schema.flow.flows import FLOW_TERMINAL_STATUSES, FlowStatus, FlowSubtaskStatus
+from schema.flow.flows import (
+    FLOW_TERMINAL_STATUSES,
+    CreateFlowRequest,
+    FlowSchema,
+    FlowStatus,
+    FlowSubtaskStatus,
+)
 from service.agent.reports import export_session_report, latest_report_id_for_session
 from service.agent.runtime import submit_turn
 from service.agent.session_state import get_session_meta, has_outstanding_session_work
@@ -25,7 +31,7 @@ from service.flow.runs import (
     flow_run_is_active,
     forget_flow_run,
     track_flow_run,
-    wait_for_flow_input,
+    wait_for_flow_input_signal,
 )
 from service.system_user.users import query_system_user_by_id
 
@@ -39,6 +45,13 @@ _SUBTASK_ATTEMPTS = 2
 
 _started = False
 _pending: list[str] = []
+
+
+async def start_flow(request: CreateFlowRequest, user: AuthUser) -> FlowSchema:
+    """Create a Flow and hand it to the controller."""
+    flow = await flow_records.create_flow(request, user)
+    schedule_flow(flow.public_id)
+    return flow
 
 
 def schedule_flow(public_id: str) -> None:
@@ -93,13 +106,14 @@ async def _run_flow(public_id: str) -> None:
             if flow_schema is None or flow_schema.status in FLOW_TERMINAL_STATUSES:
                 return
             if flow_schema.status == FlowStatus.WAITING:
-                answer = await wait_for_flow_input(public_id)
+                answer = await flow_records.take_flow_input(public_id)
                 if answer is None:
-                    return
+                    await wait_for_flow_input_signal(public_id)
+                    continue
                 if is_guard_approval_reply(answer):
-                    approve_pending_command(flow_schema.session_id)
+                    await approve_pending_command(flow_schema.session_id)
                 else:
-                    clear_pending_command(flow_schema.session_id)
+                    await clear_pending_command(flow_schema.session_id)
                 await flow_records.update_flow_status(public_id, FlowStatus.RUNNING, ask_question=None)
                 if not await _run_subtask(
                     public_id,
@@ -258,11 +272,7 @@ async def _wait_idle(session_id: str) -> None:
     while time.monotonic() < deadline:
         meta = await get_session_meta(session_id)
         outstanding = await has_outstanding_session_work(session_id)
-        runtime = get_agent_pool()
-        running = False
-        async with runtime._lock:
-            entry = runtime._pool.get(session_id)
-            running = entry is not None and entry.session.is_running()
+        running = await get_agent_pool().is_running(session_id)
         if (meta is None or not meta.is_running) and not outstanding and not running:
             return
         await asyncio.sleep(_IDLE_POLL_SECONDS)
@@ -280,6 +290,3 @@ async def _auth_user(user_id: int) -> AuthUser | None:
         return None
     return AuthUser(id=user.id, role=user.role, email=user.email, username=user.username)
 
-
-# Keep a name the plan referenced.
-start_flow = schedule_flow

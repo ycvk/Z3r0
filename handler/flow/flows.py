@@ -6,11 +6,11 @@ from schema.credential.credentials import CreateSessionCredentialRequest
 from schema.flow.flows import CreateFlowRequest, FlowInputRequest, ListFlowsResponse
 from service.agent import reports as agent_reports
 from service.common.pagination import paginated_payload
+from service.flow.controller import start_flow
 from service.flow.records import (
     add_flow_credential,
     answer_flow_input,
     cancel_flow,
-    create_flow,
     get_flow,
     list_flows,
     remove_flow_credential,
@@ -19,7 +19,7 @@ from service.flow.records import (
 
 
 async def create_flow_handler(request: CreateFlowRequest, user: AuthUser) -> CommonResponse:
-    return CommonResponse(data=await create_flow(request, user))
+    return CommonResponse(data=await start_flow(request, user))
 
 
 async def list_flows_handler(page: int, size: int, user: AuthUser) -> CommonResponse:

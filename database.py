@@ -18,6 +18,7 @@ from model.agent.context_compactions import AgentContextCompaction
 from model.agent.sessions import AgentSessionMeta
 from model.credential.credentials import SessionCredential
 from model.sandbox.containers import SandboxContainer
+from model.sandbox.guarded_commands import GuardedCommand
 from model.sandbox.images import SandboxImage
 from model.system_user.users import SystemUser
 from model.traffic.entries import SandboxTrafficEntry
@@ -56,6 +57,7 @@ _registered_models = [
     WorkProjectEvidence, WorkProjectRelationEvidence, WorkProjectFindingEvidence, WorkProjectAttackPathStepEvidence,
     AgentSessionMeta, AgentMessageMeta, AgentContextCompaction, SessionCredential,
     AgentSubordinateTask, AgentNotification, SandboxAsyncJob, SandboxTrafficEntry, AgentEventLog,
+    GuardedCommand,
     Flow, FlowSubtask,
 ]
 _registered_sdk_tables = [agent_sessions, agent_messages]

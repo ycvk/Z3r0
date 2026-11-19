@@ -11,7 +11,6 @@ from core.errors import NotFoundError
 from core.runtime.coordination import cancel_session_subagents
 from core.runtime.event_log import fetch_timeline_page
 from core.runtime.session import get_agent_pool, get_agent_registry
-from core.sandbox.command_guard import clear_session_guard
 from core.sandbox.command_jobs import cancel_session_async_sandbox_commands
 from database import get_async_session
 from logger import get_logger
@@ -418,7 +417,6 @@ async def delete_private_sessions_for_owner(owner_id: int) -> int:
 
 
 async def _teardown_session_runtime(session_id: str) -> None:
-    clear_session_guard(session_id)
     await cancel_session_subagents(session_id)
     await cancel_session_async_sandbox_commands(session_id)
     await get_agent_pool().discard(session_id)
@@ -432,7 +430,8 @@ async def cancel_sessions(session_ids: list[str], reason: str) -> None:
 
 async def _delete_session_records_in_tx(session: AsyncSession, session_id: str) -> bool:
     # one DELETE drops the SDK session row and the FK CASCADE chain takes care of agent_messages,
-    # agent_message_meta, agent_session_meta, the session's credentials, and the Flow it belongs to
+    # agent_message_meta, agent_session_meta, the session's credentials and guarded commands, and
+    # the Flow it belongs to
     result = await session.execute(
         delete(agent_sessions).where(agent_sessions.c.session_id == session_id)
     )

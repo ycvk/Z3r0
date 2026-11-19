@@ -34,7 +34,7 @@ from service.common.access import can_access_flow, can_access_work_project, can_
 from service.common.pagination import Page, paginate_statement
 from service.credential import credentials as credential_service
 from service.flow.locking import lock_flow_by_public_id
-from service.flow.runs import cancel_flow_run, submit_flow_input
+from service.flow.runs import cancel_flow_run, signal_flow_input
 from service.sandbox.records import load_sandbox_container_record
 
 
@@ -177,8 +177,6 @@ async def create_flow(request: CreateFlowRequest, user: AuthUser) -> FlowSchema:
         await agent_sessions.delete_flow_session(session_id)
         raise
     logger.info("flow created: public_id=%s session=%s", public_id, session_id)
-    from service.flow.controller import schedule_flow
-    schedule_flow(public_id)
     return await _schema_for(flow)
 
 
@@ -226,6 +224,7 @@ async def cancel_flow(public_id: str, user: AuthUser) -> FlowSchema:
         if flow.status not in FLOW_TERMINAL_STATUSES:
             flow.status = FlowStatus.CANCELLED
             flow.ask_question = None
+            flow.pending_input = None
             flow.finished_at = datetime.now()
             flow.updated_at = flow.finished_at
             session.add(flow)
@@ -235,7 +234,7 @@ async def cancel_flow(public_id: str, user: AuthUser) -> FlowSchema:
             await session.refresh(flow)
         session_id = flow.session_id
     await cancel_flow_run(public_id)
-    clear_session_guard(session_id)
+    await clear_session_guard(session_id)
     await cancel_session_subagents(session_id)
     await cancel_session_async_sandbox_commands(session_id)
     try:
@@ -246,11 +245,31 @@ async def cancel_flow(public_id: str, user: AuthUser) -> FlowSchema:
 
 
 async def answer_flow_input(public_id: str, user: AuthUser, text: str) -> FlowSchema:
-    flow = await get_flow(public_id, user)
-    if flow.status != FlowStatus.WAITING:
-        raise ValidationError("flow is not waiting")
-    submit_flow_input(public_id, text)
+    async with get_async_session() as session:
+        flow = await lock_flow_by_public_id(session, public_id)
+        if flow is None or not can_access_flow(flow, user.id, user.role):
+            raise NotFoundError("flow not found")
+        if flow.status != FlowStatus.WAITING:
+            raise ValidationError("flow is not waiting")
+        flow.pending_input = text
+        flow.updated_at = datetime.now()
+        session.add(flow)
+        await session.commit()
+    signal_flow_input(public_id)
     return await get_flow(public_id, user)
+
+
+async def take_flow_input(public_id: str) -> str | None:
+    """Hand the operator's stored answer to the controller, once."""
+    async with get_async_session() as session:
+        flow = await lock_flow_by_public_id(session, public_id)
+        if flow is None or flow.pending_input is None:
+            return None
+        answer = flow.pending_input
+        flow.pending_input = None
+        session.add(flow)
+        await session.commit()
+    return answer
 
 
 async def resolve_flow_report_path(public_id: str, user: AuthUser) -> Path:
@@ -332,6 +351,7 @@ async def update_flow_status(
         if flow is None:
             return None
         flow.status = status
+        flow.pending_input = None
         flow.updated_at = datetime.now()
         if error is not None:
             flow.error = error
@@ -450,6 +470,7 @@ async def fail_flow_run(public_id: str, error: str) -> None:
         flow.finished_at = now
         flow.updated_at = now
         flow.ask_question = None
+        flow.pending_input = None
         session.add(flow)
         await session.commit()
 

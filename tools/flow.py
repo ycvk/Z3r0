@@ -78,7 +78,7 @@ async def terminal(
     command_text = command.strip()
     if not command_text:
         return _error_result("sandbox container command is required")
-    if reason := check_command_guard(command_text, session_id=ctx.context.session_id):
+    if reason := await check_command_guard(command_text, session_id=ctx.context.session_id):
         question = (
             f"[Command Guard] High-risk command intercepted ({reason}):\n"
             f"`{command_text}`\n"

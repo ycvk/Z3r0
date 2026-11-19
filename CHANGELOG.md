@@ -25,6 +25,8 @@ All notable changes to Z3r0 are documented in this file.
 - Moved the credentials vault into `credential` packages (`model`, `schema`, `service`) and captured traffic into `traffic` packages (`model`, `schema`, `service`, `handler`, `router`). An import contract keeps both services from importing the agent, Flow, and work project services.
 - A credential belongs to one vault: its work project, or its agent session outside a project. Migration `0002` moves existing credentials into their vault; project credentials report `session_id` as null.
 - A Flow is deleted with its session. Deleting a sandbox container is refused while an unfinished Flow uses it; a finished Flow stays and reports `sandbox_container_id` as null. The session endpoints answer 404 for the session of a Flow.
+- Command Guard approvals and the operator's answer to a waiting Flow are stored in the database and still apply after a restart.
+- `app.py` installs the wiring between the session pool, the subagent runtime, and sandbox command jobs as `RuntimeCoordination`; no module registers callbacks at import time.
 
 ### Fixed
 
