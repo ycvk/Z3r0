@@ -4139,11 +4139,8 @@ export interface components {
             project_id?: number | null;
             /** Secret */
             secret: string;
-            /**
-             * Session Id
-             * @default
-             */
-            session_id: string;
+            /** Session Id */
+            session_id?: string | null;
             /** Target */
             target: string;
             /**

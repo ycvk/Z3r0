@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import or_
+from sqlalchemy import ColumnElement, or_
 from sqlmodel import col, select
 
-from core.errors import ValidationError
+from core.errors import NotFoundError, ValidationError
 from database import get_async_session
 from model.credential.credentials import SessionCredential
-from model.agent.sessions import AgentSessionMeta
 from schema.credential.credentials import SessionCredentialSchema
 from service.common.pagination import Page, paginate_statement
 
@@ -28,12 +27,11 @@ def _to_schema(row: SessionCredential) -> SessionCredentialSchema:
     )
 
 
-def _project_credential_scope_clause(project_id: int):
-    project_sessions = select(AgentSessionMeta.session_id).where(AgentSessionMeta.project_id == project_id)
-    return or_(
-        SessionCredential.project_id == project_id,
-        col(SessionCredential.session_id).in_(project_sessions),
-    )
+def _vault(*, session_id: str, project_id: int | None) -> ColumnElement[bool]:
+    """Everything recorded in a work project shares the project's vault; a session outside a project has its own."""
+    if project_id is not None:
+        return col(SessionCredential.project_id) == project_id
+    return col(SessionCredential.session_id) == session_id
 
 
 async def upsert_credential(
@@ -59,16 +57,14 @@ async def upsert_credential(
 
     now = datetime.now()
     async with get_async_session() as session:
-        stmt = select(SessionCredential).where(
-            SessionCredential.target == norm_target,
-            SessionCredential.credential_type == norm_type,
-            SessionCredential.username == norm_user,
-        )
-        if project_id is not None:
-            stmt = stmt.where(SessionCredential.project_id == project_id)
-        else:
-            stmt = stmt.where(SessionCredential.session_id == session_id)
-        existing = (await session.exec(stmt)).first()
+        existing = (await session.exec(
+            select(SessionCredential).where(
+                _vault(session_id=session_id, project_id=project_id),
+                SessionCredential.target == norm_target,
+                SessionCredential.credential_type == norm_type,
+                SessionCredential.username == norm_user,
+            )
+        )).first()
         if existing is not None:
             existing.secret = norm_secret
             if norm_note:
@@ -81,7 +77,7 @@ async def upsert_credential(
 
         row = SessionCredential(
             owner_id=owner_id,
-            session_id=session_id,
+            session_id=None if project_id is not None else session_id,
             project_id=project_id,
             target=norm_target,
             credential_type=norm_type,
@@ -103,17 +99,11 @@ async def list_credentials_for_context(
     project_id: int | None = None,
     target: str = "",
 ) -> list[SessionCredentialSchema]:
-    clauses = []
-    if project_id is not None and session_id:
-        clauses.append(or_(_project_credential_scope_clause(project_id), SessionCredential.session_id == session_id))
-    elif project_id is not None:
-        clauses.append(_project_credential_scope_clause(project_id))
-    elif session_id:
-        clauses.append(SessionCredential.session_id == session_id)
-    else:
-        return []
-
-    stmt = select(SessionCredential).where(*clauses).order_by(col(SessionCredential.updated_at).desc(), col(SessionCredential.id).desc())
+    stmt = (
+        select(SessionCredential)
+        .where(_vault(session_id=session_id, project_id=project_id))
+        .order_by(col(SessionCredential.updated_at).desc(), col(SessionCredential.id).desc())
+    )
     norm_target = target.strip().lower()
     async with get_async_session() as session:
         rows = list((await session.exec(stmt)).all())
@@ -131,7 +121,7 @@ async def query_project_credentials(
 ) -> Page[SessionCredentialSchema]:
     stmt = (
         select(SessionCredential)
-        .where(_project_credential_scope_clause(project_id))
+        .where(SessionCredential.project_id == project_id)
         .order_by(col(SessionCredential.updated_at).desc(), col(SessionCredential.id).desc())
     )
     if cleaned := keyword.strip():
@@ -158,22 +148,15 @@ async def delete_credential(
     *,
     session_id: str = "",
     project_id: int | None = None,
-) -> bool:
+) -> None:
     async with get_async_session() as session:
-        row = await session.get(SessionCredential, credential_id)
+        row = (await session.exec(
+            select(SessionCredential).where(
+                SessionCredential.id == credential_id,
+                _vault(session_id=session_id, project_id=project_id),
+            )
+        )).first()
         if row is None:
-            return False
-        matched = False
-        if project_id is not None:
-            if row.project_id == project_id:
-                matched = True
-            elif row.session_id:
-                meta = await session.get(AgentSessionMeta, row.session_id)
-                matched = meta is not None and meta.project_id == project_id
-        if not matched and session_id and row.session_id == session_id:
-            matched = True
-        if not matched:
-            return False
+            raise NotFoundError("Credential not found")
         await session.delete(row)
         await session.commit()
-        return True

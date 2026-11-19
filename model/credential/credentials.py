@@ -1,17 +1,33 @@
 from datetime import datetime
 
+from sqlalchemy import CheckConstraint
 from sqlmodel import Field, SQLModel
 
 
 class SessionCredential(SQLModel, table=True):
-    """Per-session or per-project credential vault record."""
+    """A credential in the vault of one work project, or of one agent session outside a project.
+
+    The vault's project or session owns the record and takes it along when it is deleted.
+    """
 
     __tablename__ = "session_credentials"
+    __table_args__ = (
+        CheckConstraint(
+            "(project_id IS NULL) <> (session_id IS NULL)",
+            name="ck_session_credentials_single_vault",
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
-    owner_id: int = Field(index=True, foreign_key="system_users.id")
-    session_id: str = Field(default="", index=True)
-    project_id: int | None = Field(default=None, foreign_key="work_projects.id", index=True)
+    # the user who recorded the credential
+    owner_id: int | None = Field(default=None, index=True, foreign_key="system_users.id", ondelete="SET NULL")
+    session_id: str | None = Field(
+        default=None,
+        index=True,
+        foreign_key="agent_sessions.session_id",
+        ondelete="CASCADE",
+    )
+    project_id: int | None = Field(default=None, index=True, foreign_key="work_projects.id", ondelete="CASCADE")
     target: str = Field(default="", max_length=255, index=True)
     credential_type: str = Field(default="password", max_length=64)
     username: str = Field(default="", max_length=255)

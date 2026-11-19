@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-11-19`
-Owners: `service/credential` (vault) · `service/traffic` (captured exchanges) · `pyproject.toml` (import contract)
+Owners: `service/credential` (vault) · `service/traffic` (captured exchanges) · `pyproject.toml` (import contract) · `tests/test_credential_vault.py` (vault lifecycle)
 
 ## Decision
 
@@ -28,13 +28,36 @@ Boundaries:
   background synchronization. A work project turns an exchange into evidence
   through `get_project_traffic_entry`.
 
+Credential ownership:
+
+- A credential belongs to exactly one vault. Everything recorded in a work
+  project, by an operator, a project session, or a Flow of the project, goes to
+  the project's vault. A session outside a project has its own vault. A check
+  constraint keeps one of `project_id` and `session_id` set.
+- Deleting a work project or a session deletes its vault through
+  `ON DELETE CASCADE`.
+- `owner_id` names the user who recorded the credential and becomes null when
+  that user is deleted.
+
+Traffic entries reference their container, project, and capturing user by
+plain id and stay after any of them is deleted.
+
 ## Consequences
 
 - Vault behavior such as encryption at rest, and traffic behavior such as
   retention, each have one package to change.
+- A project credential reports `session_id` as null in the API.
+- Revision `0002` moves existing credentials into their vault and removes
+  those whose session no longer exists.
 
 ## Evidence
 
-2026-11-19, local: `uv run ruff check`, `uv run lint-imports` (3 contracts
-kept), `uv run basedpyright` (0 new errors), and `uv run pytest` pass; the API
-contract export has no diff.
+2026-11-19, local: `tests/test_credential_vault.py` covers the shared project
+vault, the vault of a session, deletion of a session, a work project, and a
+recording user, deletion through the wrong vault, and revision `0002` on rows
+written under revision `0001`. Revision `0002` also ran on a copy of a
+database that predates migrations, seeded with the same rows.
+`uv run ruff check`, `uv run lint-imports` (3 contracts kept),
+`uv run basedpyright` (0 new errors, 649 in baseline), and `uv run pytest`
+(35 passed) pass; the API contract export differs only in the nullable
+`session_id` of a credential, and both frontend builds pass.

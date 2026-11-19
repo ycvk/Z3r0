@@ -23,10 +23,14 @@ All notable changes to Z3r0 are documented in this file.
 - Services raise `DomainError` subclasses (`ValidationError`, `AuthenticationError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, `UpstreamError`) mapped to HTTP status codes in `middleware/common/response.py`.
 - All resource endpoints addressed by id answer 404 when the resource is absent or the caller lacks access to it; 403 is reserved for role gates.
 - Moved the credentials vault into `credential` packages (`model`, `schema`, `service`) and captured traffic into `traffic` packages (`model`, `schema`, `service`, `handler`, `router`). An import contract keeps both services from importing the agent, Flow, and work project services.
+- A credential belongs to one vault: its work project, or its agent session outside a project. Migration `0002` moves existing credentials into their vault; project credentials report `session_id` as null.
 
 ### Fixed
 
 - Fixed specialists in a Flow with a sandbox receiving `read_sandbox_command_output`, `cancel_sandbox_async_job`, and `load_skill` twice in their tool list.
+- Fixed deleting a work project failing when its vault held credentials.
+- Fixed deleting a user failing after that user had saved a credential.
+- Fixed credentials remaining in the database after their session was deleted.
 
 ## [0.3.1] - 2026-11-19
 

@@ -8,7 +8,7 @@ class SessionCredentialSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: int
-    session_id: str = ""
+    session_id: str | None = None
     project_id: int | None = None
     target: str
     credential_type: str = "password"

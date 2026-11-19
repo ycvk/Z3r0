@@ -422,12 +422,7 @@ async def delete_work_project_credential_for_user(
     user_role: SystemUserRole,
 ) -> None:
     await _require_accessible_project(project_id, user_id, user_role)
-    deleted = await credential_service.delete_credential(
-        credential_id,
-        project_id=project_id,
-    )
-    if not deleted:
-        raise NotFoundError("Credential not found")
+    await credential_service.delete_credential(credential_id, project_id=project_id)
 
 
 def _format_traffic_evidence_summary(entry: SandboxTrafficEntry, note: str) -> str:

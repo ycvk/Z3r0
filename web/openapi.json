@@ -5929,9 +5929,15 @@
             "type": "string"
           },
           "session_id": {
-            "default": "",
-            "title": "Session Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
           },
           "target": {
             "title": "Target",

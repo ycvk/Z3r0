@@ -298,13 +298,11 @@ async def remove_flow_credential(
     flow = await load_flow_row(public_id)
     if flow is None or not can_access_flow(flow, user.id, user.role):
         raise NotFoundError("flow not found")
-    deleted = await credential_service.delete_credential(
+    await credential_service.delete_credential(
         credential_id,
         session_id=flow.session_id,
         project_id=flow.project_id,
     )
-    if not deleted:
-        raise NotFoundError("credential not found")
     return await _schema_for(flow)
 
 

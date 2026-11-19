@@ -415,8 +415,8 @@ async def cancel_sessions(session_ids: list[str], reason: str) -> None:
 
 
 async def _delete_session_records_in_tx(session: AsyncSession, session_id: str) -> bool:
-    # one DELETE drops the SDK session row and the FK CASCADE chain takes
-    # care of agent_messages, agent_message_meta, and agent_session_meta
+    # one DELETE drops the SDK session row and the FK CASCADE chain takes care of
+    # agent_messages, agent_message_meta, agent_session_meta, and the session's credentials
     result = await session.execute(
         delete(agent_sessions).where(agent_sessions.c.session_id == session_id)
     )
