@@ -20,6 +20,8 @@ _http_client: httpx.AsyncClient | None = None
 _EGRESS_APPLY_ATTEMPTS = 3
 _EGRESS_APPLY_RETRY_SECONDS = 0.5
 _EGRESS_APPLY_BATCH_SIZE = 16
+_CONTROL_PROXY_READY_TIMEOUT_SECONDS = 60.0
+_CONTROL_PROXY_READY_POLL_SECONDS = 0.25
 
 
 @dataclass(frozen=True)
@@ -96,10 +98,34 @@ async def resolve_container_egress_environment(container_id: int) -> dict[str, s
     ))
 
 
-async def apply_container_egress(container_id: int) -> None:
-    target = await resolve_sandbox_control_proxy_target(container_id, require_running=True)
+async def wait_for_control_proxy_ready(target: SandboxControlProxyTarget) -> None:
+    """Block until the control proxy answers; the sandbox entrypoint installs its MITM CA before listening."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _CONTROL_PROXY_READY_TIMEOUT_SECONDS
+    while True:
+        try:
+            response = await _get_http_client().get(
+                f"{target.base_url}/healthz",
+                headers=sandbox_control_proxy_token_headers(target),
+                timeout=2.0,
+            )
+            response.raise_for_status()
+            return
+        except (httpx.HTTPError, OSError) as exc:
+            if loop.time() >= deadline:
+                raise TimeoutError(
+                    f"Sandbox control proxy did not become ready: container={target.container_id}"
+                ) from exc
+        await asyncio.sleep(_CONTROL_PROXY_READY_POLL_SECONDS)
+
+
+async def apply_container_egress(container_id: int, *, starting: bool = False) -> None:
+    """Push the stored egress selection to the control proxy; `starting` targets a container that is still booting."""
+    target = await resolve_sandbox_control_proxy_target(container_id, require_running=not starting)
     if target is None:
         raise ValueError("Sandbox container is not running")
+    if starting:
+        await wait_for_control_proxy_ready(target)
     environment = await resolve_container_egress_environment(container_id)
     await apply_egress_environment(target, environment)
 

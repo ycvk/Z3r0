@@ -2,7 +2,11 @@ package main
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -35,12 +39,22 @@ type proxyTrafficEntry struct {
 
 type trafficRing struct {
 	mu      sync.RWMutex
+	bootID  string
 	nextSeq int64
 	entries []proxyTrafficEntry
 }
 
 var sandboxTraffic = &trafficRing{
+	bootID:  newTrafficBootID(),
 	entries: make([]proxyTrafficEntry, 0, maxTrafficEntries),
+}
+
+// newTrafficBootID identifies one proxy process: sequence numbers restart with the process,
+// so a cursor is only meaningful together with the boot it was taken from.
+func newTrafficBootID() string {
+	raw := make([]byte, 16)
+	_, _ = rand.Read(raw)
+	return hex.EncodeToString(raw)
 }
 
 func (t *trafficRing) Record(entry proxyTrafficEntry) {
@@ -81,9 +95,13 @@ func handleTraffic(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		afterSeq, _ := strconv.ParseInt(r.URL.Query().Get("after_seq"), 10, 64)
+		if r.URL.Query().Get("boot_id") != sandboxTraffic.bootID {
+			afterSeq = 0
+		}
 		items, lastSeq := sandboxTraffic.Since(afterSeq)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
+			"boot_id":  sandboxTraffic.bootID,
 			"items":    items,
 			"last_seq": lastSeq,
 		})
@@ -122,21 +140,71 @@ func isBinaryContentType(contentType string) bool {
 	}
 }
 
+// narrowAcceptEncoding limits the codings offered upstream to those decodeCapturedBody can read,
+// so captured response bodies stay searchable text.
+func narrowAcceptEncoding(h http.Header) {
+	values, ok := h["Accept-Encoding"]
+	if !ok {
+		return
+	}
+	kept := make([]string, 0, 2)
+	for _, value := range values {
+		for _, token := range strings.Split(value, ",") {
+			token = strings.TrimSpace(token)
+			coding, _, _ := strings.Cut(token, ";")
+			switch strings.ToLower(strings.TrimSpace(coding)) {
+			case "gzip", "x-gzip", "deflate", "identity":
+				kept = append(kept, token)
+			}
+		}
+	}
+	if len(kept) == 0 {
+		kept = append(kept, "identity")
+	}
+	h.Set("Accept-Encoding", strings.Join(kept, ", "))
+}
+
+// decodeCapturedBody returns the captured payload as text, or "" when it cannot be decoded
+// or is binary (contains NUL).
 func decodeCapturedBody(raw []byte, contentEncoding string) string {
 	if len(raw) == 0 {
 		return ""
 	}
-	if strings.EqualFold(strings.TrimSpace(contentEncoding), "gzip") {
-		gr, err := gzip.NewReader(bytes.NewReader(raw))
-		if err == nil {
-			defer gr.Close()
-			decoded, _ := io.ReadAll(io.LimitReader(gr, maxTrafficBodyBytes))
-			if len(decoded) > 0 {
-				return string(decoded)
-			}
-		}
+	decoded, ok := decodeContentEncoding(raw, contentEncoding)
+	if !ok || bytes.IndexByte(decoded, 0) >= 0 {
+		return ""
 	}
-	return string(raw)
+	return string(decoded)
+}
+
+func decodeContentEncoding(raw []byte, contentEncoding string) ([]byte, bool) {
+	switch strings.ToLower(strings.TrimSpace(contentEncoding)) {
+	case "", "identity":
+		return raw, true
+	case "gzip", "x-gzip":
+		gr, err := gzip.NewReader(bytes.NewReader(raw))
+		if err != nil {
+			return nil, false
+		}
+		defer gr.Close()
+		return readCapturedPrefix(gr)
+	case "deflate":
+		if zr, err := zlib.NewReader(bytes.NewReader(raw)); err == nil {
+			defer zr.Close()
+			return readCapturedPrefix(zr)
+		}
+		fr := flate.NewReader(bytes.NewReader(raw))
+		defer fr.Close()
+		return readCapturedPrefix(fr)
+	default:
+		return nil, false
+	}
+}
+
+// readCapturedPrefix tolerates the unexpected EOF of a capture truncated at maxTrafficBodyBytes.
+func readCapturedPrefix(r io.Reader) ([]byte, bool) {
+	decoded, _ := io.ReadAll(io.LimitReader(r, maxTrafficBodyBytes))
+	return decoded, len(decoded) > 0
 }
 
 type tapReadCloser struct {

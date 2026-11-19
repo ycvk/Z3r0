@@ -255,6 +255,7 @@ func handleEgressHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	startedAt := time.Now()
+	narrowAcceptEncoding(r.Header)
 	upstream, useProxyFormat, proxyAuth, err := dialEgressHTTP(target)
 	if err != nil {
 		log.Printf("egress HTTP dial failed target=%s upstream=%s: %v", target.Host, egressState.Config().LogLabel(), err)

@@ -65,6 +65,15 @@ def _parse_url_parts(raw_url: str) -> tuple[str, str]:
         return "", "/"
 
 
+def _storable_text(value: str) -> str:
+    """PostgreSQL text holds neither NUL nor unpaired surrogates; captured payloads can carry both."""
+    return value.replace("\x00", "").encode("utf-8", errors="replace").decode("utf-8")
+
+
+def _dumps_headers(headers: object) -> str:
+    return _storable_text(json.dumps(headers or {}, ensure_ascii=False))
+
+
 def _loads_headers(raw: str) -> dict[str, str]:
     try:
         parsed = json.loads(raw or "{}")
@@ -234,7 +243,7 @@ async def _request_proxy_traffic(
     url: str,
     *,
     headers: dict[str, str],
-    params: dict[str, int] | None = None,
+    params: dict[str, int | str] | None = None,
 ) -> httpx.Response:
     last_error: Exception | None = None
     for attempt in range(_PROXY_TRAFFIC_ATTEMPTS):
@@ -274,13 +283,27 @@ async def sync_container_traffic(
             project_id=project_id,
         )
 
+        # Proxy sequence numbers restart with the proxy process, so the cursor is the pair
+        # (boot id, sequence) of the most recently stored exchange.
         async with get_async_session() as session:
-            last_seq = int(
+            cursor_boot = (
+                await session.exec(
+                    select(SandboxTrafficEntry.proxy_boot)
+                    .where(
+                        SandboxTrafficEntry.sandbox_container_id == sandbox_container_id,
+                        SandboxTrafficEntry.source == "proxy",
+                    )
+                    .order_by(col(SandboxTrafficEntry.id).desc())
+                    .limit(1)
+                )
+            ).first() or ""
+            cursor_seq = int(
                 (
                     await session.exec(
                         select(func.coalesce(func.max(SandboxTrafficEntry.proxy_seq), 0)).where(
                             SandboxTrafficEntry.sandbox_container_id == sandbox_container_id,
                             SandboxTrafficEntry.source == "proxy",
+                            SandboxTrafficEntry.proxy_boot == cursor_boot,
                         )
                     )
                 ).one()
@@ -291,12 +314,14 @@ async def sync_container_traffic(
             "GET",
             f"{target.base_url}/traffic",
             headers=sandbox_control_proxy_token_headers(target),
-            params={"after_seq": last_seq},
+            params={"after_seq": cursor_seq, "boot_id": cursor_boot},
         )
         payload = response.json()
         raw_items = payload.get("items") if isinstance(payload, dict) else None
         if not isinstance(raw_items, list) or not raw_items:
             return 0
+        proxy_boot = str(payload.get("boot_id") or "")[:64]
+        last_seq = cursor_seq if proxy_boot == cursor_boot else 0
 
         now = datetime.now()
         seen_seqs: set[int] = set()
@@ -308,12 +333,12 @@ async def sync_container_traffic(
             if seq <= last_seq or seq in seen_seqs:
                 continue
             seen_seqs.add(seq)
-            raw_url = str(item.get("url") or "")[:2048]
+            raw_url = _storable_text(str(item.get("url") or ""))[:2048]
             host, path = _parse_url_parts(raw_url)
-            host = str(item.get("host") or host)[:255]
-            path = str(item.get("path") or path)[:1024]
-            req_body = str(item.get("request_body") or "")[:_MAX_BODY_CHARS]
-            resp_body = str(item.get("response_body") or "")[:_MAX_BODY_CHARS]
+            host = _storable_text(str(item.get("host") or host))[:255]
+            path = _storable_text(str(item.get("path") or path))[:1024]
+            req_body = _storable_text(str(item.get("request_body") or ""))[:_MAX_BODY_CHARS]
+            resp_body = _storable_text(str(item.get("response_body") or ""))[:_MAX_BODY_CHARS]
             resp_bytes = int(item.get("response_bytes") or len(resp_body.encode("utf-8", errors="ignore")))
             rows.append(
                 SandboxTrafficEntry(
@@ -321,15 +346,16 @@ async def sync_container_traffic(
                     sandbox_container_id=sandbox_container_id,
                     project_id=resolved_project,
                     proxy_seq=seq,
+                    proxy_boot=proxy_boot,
                     source="proxy",
-                    method=str(item.get("method") or "GET").upper()[:16],
+                    method=_storable_text(str(item.get("method") or "GET")).upper()[:16],
                     url=raw_url,
                     host=host,
                     path=path,
                     status_code=int(item.get("status_code") or 0),
-                    request_headers_json=json.dumps(item.get("request_headers") or {}, ensure_ascii=False),
+                    request_headers_json=_dumps_headers(item.get("request_headers")),
                     request_body=req_body,
-                    response_headers_json=json.dumps(item.get("response_headers") or {}, ensure_ascii=False),
+                    response_headers_json=_dumps_headers(item.get("response_headers")),
                     response_body=resp_body,
                     response_bytes=max(resp_bytes, 0),
                     duration_ms=max(int(item.get("duration_ms") or 0), 0),
@@ -423,10 +449,10 @@ async def ingest_traffic(
     now = datetime.now()
     rows: list[SandboxTrafficEntry] = []
     for item in request.items:
-        raw_url = item.url.strip()[:2048]
+        raw_url = _storable_text(item.url).strip()[:2048]
         host, path = _parse_url_parts(raw_url)
-        req_body = item.request_body[:_MAX_BODY_CHARS]
-        resp_body = item.response_body[:_MAX_BODY_CHARS]
+        req_body = _storable_text(item.request_body)[:_MAX_BODY_CHARS]
+        resp_body = _storable_text(item.response_body)[:_MAX_BODY_CHARS]
         resp_bytes = item.response_bytes or len(resp_body.encode("utf-8", errors="ignore"))
         rows.append(
             SandboxTrafficEntry(
@@ -435,14 +461,14 @@ async def ingest_traffic(
                 project_id=request.project_id,
                 proxy_seq=0,
                 source="ingest",
-                method=item.method.strip().upper()[:16] or "GET",
+                method=_storable_text(item.method).strip().upper()[:16] or "GET",
                 url=raw_url,
                 host=host,
                 path=path,
                 status_code=item.status_code,
-                request_headers_json=json.dumps(item.request_headers or {}, ensure_ascii=False),
+                request_headers_json=_dumps_headers(item.request_headers),
                 request_body=req_body,
-                response_headers_json=json.dumps(item.response_headers or {}, ensure_ascii=False),
+                response_headers_json=_dumps_headers(item.response_headers),
                 response_body=resp_body,
                 response_bytes=max(resp_bytes, 0),
                 duration_ms=max(item.duration_ms, 0),

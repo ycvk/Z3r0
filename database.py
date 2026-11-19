@@ -82,6 +82,9 @@ async def create_all_tables() -> None:
             await conn.execute(
                 text(f"ALTER TABLE agent_session_meta ADD COLUMN IF NOT EXISTS {col_name} BIGINT NOT NULL DEFAULT 0")
             )
+        await conn.execute(text(
+            "ALTER TABLE sandbox_traffic_entries ADD COLUMN IF NOT EXISTS proxy_boot VARCHAR(64) NOT NULL DEFAULT ''"
+        ))
 
     logger.info("all tables created")
 

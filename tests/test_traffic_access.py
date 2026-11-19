@@ -4,6 +4,7 @@ import asyncio
 from aiohttp import web
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlmodel import select
 
 from app import create_app
 from database import get_async_session
@@ -304,5 +305,126 @@ async def test_proxy_traffic_sync_dedup_and_clear_error_surface(test_db: None) -
         )
         assert deleted == 2
         assert items == []
+    finally:
+        await runner.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_proxy_sync_stores_binary_bodies_and_follows_proxy_restart(test_db: None) -> None:
+    def entry(seq: int, path: str, **overrides: object) -> dict[str, object]:
+        return {
+            "seq": seq,
+            "method": "GET",
+            "url": f"https://target.example{path}",
+            "host": "target.example",
+            "path": path,
+            "status_code": 200,
+            "request_headers": {},
+            "request_body": "",
+            "response_headers": {"Content-Type": "application/json"},
+            "response_body": f"body-{seq}",
+            "response_bytes": 6,
+            "duration_ms": 3,
+            "created_at": "2026-11-19T03:00:00Z",
+            **overrides,
+        }
+
+    proxy = {
+        "boot_id": "boot-a",
+        "items": [
+            entry(1, "/first"),
+            entry(2, "/binary", request_body="req\x00uest", response_body="\x00\x01proto\x00buf\ud800"),
+            entry(3, "/after-binary"),
+        ],
+    }
+
+    async def handle_proxy_traffic(request: web.Request) -> web.Response:
+        after_seq = int(request.query.get("after_seq", "0"))
+        if request.query.get("boot_id", "") != proxy["boot_id"]:
+            after_seq = 0
+        items = [it for it in proxy["items"] if it["seq"] > after_seq]
+        last_seq = max((it["seq"] for it in proxy["items"]), default=0)
+        return web.json_response({"boot_id": proxy["boot_id"], "items": items, "last_seq": last_seq})
+
+    proxy_app = web.Application()
+    proxy_app.router.add_get("/traffic", handle_proxy_traffic)
+    runner = web.AppRunner(proxy_app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]  # type: ignore[union-attr]
+
+    try:
+        async with get_async_session() as session:
+            alice = SystemUser(role=SystemUserRole.USER, email="a3@test.local", username="alice3")
+            host = ManagedHost(ip_address="127.0.0.1")
+            image = SandboxImage(image_name="penetration-runtime:latest", control_proxy_port=8000)
+            session.add_all([alice, host, image])
+            await session.commit()
+            for obj in (alice, host, image):
+                await session.refresh(obj)
+            container = SandboxContainer(
+                host_id=host.id or 0,
+                container_name="restart-sbx",
+                container_hash="hash-restart",
+                owner_id=alice.id or 0,
+                image_id=image.id or 0,
+                control_proxy_host_port=port,
+                control_proxy_token="secret-proxy-token",
+                status=SandboxContainerStatus.RUNNING,
+            )
+            session.add(container)
+            await session.commit()
+            await session.refresh(container)
+            await session.refresh(alice)
+        container_id = container.id or 0
+
+        async def stored() -> list[SandboxTrafficEntry]:
+            async with get_async_session() as session:
+                return list((await session.exec(
+                    select(SandboxTrafficEntry)
+                    .where(SandboxTrafficEntry.sandbox_container_id == container_id)
+                    .order_by(SandboxTrafficEntry.id)
+                )).all())
+
+        # A binary payload must neither fail the batch nor block the entries behind it.
+        assert await traffic_service.sync_container_traffic(container_id) == 3
+        rows = await stored()
+        assert [row.path for row in rows] == ["/first", "/binary", "/after-binary"]
+        assert rows[1].request_body == "request"
+        assert "\x00" not in rows[1].response_body and "protobuf" in rows[1].response_body
+        assert await traffic_service.sync_container_traffic(container_id) == 0
+
+        # The proxy process restarts: its sequence starts over under a new boot id.
+        proxy["boot_id"] = "boot-b"
+        proxy["items"] = [entry(1, "/after-restart")]
+        assert await traffic_service.sync_container_traffic(container_id) == 1
+        assert await traffic_service.sync_container_traffic(container_id) == 0
+        proxy["items"].append(entry(2, "/after-restart-2"))
+        assert await traffic_service.sync_container_traffic(container_id) == 1
+        rows = await stored()
+        assert [row.path for row in rows] == [
+            "/first", "/binary", "/after-binary", "/after-restart", "/after-restart-2",
+        ]
+        assert [(row.proxy_boot, row.proxy_seq) for row in rows[3:]] == [("boot-b", 1), ("boot-b", 2)]
+
+        app = create_app()
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            r_ingest = await client.post(
+                "/api/traffic/ingest",
+                json={
+                    "sandbox_container_id": container_id,
+                    "items": [{
+                        "method": "POST",
+                        "url": "https://target.example/upload",
+                        "request_body": "part\u0000one",
+                        "response_body": "\u0000\u0000done",
+                    }],
+                },
+                headers=auth_headers(alice),
+            )
+            assert r_ingest.status_code == 200
+        ingested = (await stored())[-1]
+        assert (ingested.request_body, ingested.response_body) == ("partone", "done")
     finally:
         await runner.cleanup()

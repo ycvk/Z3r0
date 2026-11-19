@@ -13,6 +13,7 @@ class SandboxTrafficEntry(SQLModel, table=True):
     sandbox_container_id: int | None = Field(default=None, index=True)
     project_id: int | None = Field(default=None, index=True)
     proxy_seq: int = Field(default=0, index=True)
+    proxy_boot: str = Field(default="", max_length=64)
     source: str = Field(default="proxy", max_length=32)
     method: str = Field(default="GET", max_length=16, index=True)
     url: str = Field(default="", max_length=2048)

@@ -26,6 +26,8 @@ from core.sandbox.command_jobs import cancel_sandbox_async_commands
 from service.sandbox.control_proxy import apply_container_egress
 from service.sandbox.docker_ops import (
     create_container_sync,
+    docker_status_to_sandbox_status,
+    inspect_container_state_sync,
     pause_container_sync,
     remove_container_sync,
     resume_container_sync,
@@ -243,22 +245,30 @@ async def start_sandbox_container(id: int) -> SandboxContainerMutationResult:
             return SandboxContainerMutationResult(record=record, succeeded=False, message="Managed host not found")
         await asyncio.to_thread(start_container_sync, host, record.container.container_hash)
         await asyncio.sleep(1)
+        # The container is recorded as running only once its control proxy answers, so nothing
+        # reaches it while the entrypoint is still installing the MITM CA.
+        state = await asyncio.to_thread(inspect_container_state_sync, host, record.container.container_hash)
+        if (
+            state.exists
+            and docker_status_to_sandbox_status(state.status) == SandboxContainerStatus.RUNNING
+            and record.container.control_proxy_host_port > 0
+        ):
+            try:
+                await apply_container_egress(id, starting=True)
+            except Exception:
+                logger.exception("Sandbox container control proxy did not accept egress after start: %s", id)
+                await asyncio.to_thread(stop_container_sync, host, record.container.container_hash)
+                return SandboxContainerMutationResult(
+                    record=await save_sandbox_container_status(id, SandboxContainerStatus.STOPPED),
+                    succeeded=False,
+                    message="Sandbox container was stopped because its control proxy did not become ready",
+                )
         await sync_container_status_unlocked(ContainerStatusSnapshot(
             id=record.container.id or id,
             host_id=record.container.host_id,
             container_hash=record.container.container_hash,
             status=record.container.status,
         ))
-        next_record = await load_sandbox_container_record(id)
-        if (
-            next_record is not None
-            and next_record.container.status == SandboxContainerStatus.RUNNING
-            and next_record.container.control_proxy_host_port > 0
-        ):
-            try:
-                await apply_container_egress(id)
-            except Exception:
-                logger.warning("Sandbox container started, but egress refresh failed: %s", id, exc_info=True)
     except docker.errors.NotFound:
         logger.debug("Sandbox container instance not found while starting: %s", id)
         return SandboxContainerMutationResult(

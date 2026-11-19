@@ -354,6 +354,7 @@ func serveMITMHTTPStream(clientTLS net.Conn, upstreamTLS net.Conn, fallbackHost 
 			path += "?" + req.URL.RawQuery
 		}
 		fullURL := "https://" + authority + path
+		narrowAcceptEncoding(req.Header)
 		origReqHeaders := flattenHeader(req.Header)
 
 		if isUpgradeRequest(req.Header) {
