@@ -4,6 +4,7 @@ from typing import Any
 from sqlalchemy import update
 from sqlmodel import select
 
+from core.errors import NotFoundError
 from core.runtime import notifications as agent_notifications
 from database import get_async_session
 from model.agent.sessions import AgentSessionMeta
@@ -29,7 +30,7 @@ async def mark_session_running(
     async with get_async_session() as session:
         await lock_system_user_lifecycle(session, user_id)
         if await session.get(SystemUser, user_id) is None:
-            raise PermissionError("System user no longer exists")
+            raise NotFoundError("System user no longer exists")
         meta = await session.get(AgentSessionMeta, session_id)
         if meta is None:
             return

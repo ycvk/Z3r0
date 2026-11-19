@@ -1,6 +1,3 @@
-from http import HTTPStatus
-
-from handler.common.http import raise_api_error
 from middleware.system_user import AuthUser
 from schema.agent.credentials import CreateSessionCredentialRequest
 from schema.common.responses import CommonResponse
@@ -38,16 +35,11 @@ from service.work_project.records import (
 
 async def _page_response(query, response_model, project_id: int, page: int, size: int, user: AuthUser, **kwargs):
     result = await query(project_id, page=page, size=size, user_id=user.id, user_role=user.role, **kwargs)
-    if result is None:
-        raise_api_error(HTTPStatus.NOT_FOUND, "Work project not found")
     return CommonResponse(data=response_model(**paginated_payload(result, result.items)))
 
 
 async def get_work_project_overview_handler(id: int, user: AuthUser) -> CommonResponse:
-    result = await get_work_project_overview_for_user(id, user_id=user.id, user_role=user.role)
-    if result is None:
-        raise_api_error(HTTPStatus.NOT_FOUND, "Work project not found")
-    return CommonResponse(data=result)
+    return CommonResponse(data=await get_work_project_overview_for_user(id, user_id=user.id, user_role=user.role))
 
 
 async def query_work_project_assets_handler(
@@ -155,10 +147,7 @@ async def query_work_project_activity_handler(id: int, page: int, size: int, use
 
 
 async def get_work_project_graph_handler(id: int, user: AuthUser) -> CommonResponse:
-    result = await get_work_project_graph_for_user(id, user_id=user.id, user_role=user.role)
-    if result is None:
-        raise_api_error(HTTPStatus.NOT_FOUND, "Work project not found")
-    return CommonResponse(data=result)
+    return CommonResponse(data=await get_work_project_graph_for_user(id, user_id=user.id, user_role=user.role))
 
 
 async def query_work_project_credentials_handler(
@@ -184,17 +173,12 @@ async def create_work_project_credential_handler(
     request: CreateSessionCredentialRequest,
     user: AuthUser,
 ) -> CommonResponse:
-    try:
-        saved = await create_work_project_credential_for_user(
-            id,
-            request,
-            user_id=user.id,
-            user_role=user.role,
-        )
-    except ValueError as exc:
-        raise_api_error(HTTPStatus.BAD_REQUEST, str(exc))
-    if saved is None:
-        raise_api_error(HTTPStatus.NOT_FOUND, "Work project not found")
+    saved = await create_work_project_credential_for_user(
+        id,
+        request,
+        user_id=user.id,
+        user_role=user.role,
+    )
     return CommonResponse(message="Credential saved", data=saved)
 
 
@@ -203,16 +187,12 @@ async def delete_work_project_credential_handler(
     credential_id: int,
     user: AuthUser,
 ) -> CommonResponse:
-    deleted = await delete_work_project_credential_for_user(
+    await delete_work_project_credential_for_user(
         id,
         credential_id,
         user_id=user.id,
         user_role=user.role,
     )
-    if deleted is None:
-        raise_api_error(HTTPStatus.NOT_FOUND, "Work project not found")
-    if not deleted:
-        raise_api_error(HTTPStatus.NOT_FOUND, "Credential not found")
     return CommonResponse(message="Credential deleted", data=DeleteWorkProjectCredentialResponse(deleted=True))
 
 
@@ -222,15 +202,11 @@ async def create_traffic_evidence_handler(
     request: CreateTrafficEvidenceRequest,
     user: AuthUser,
 ) -> CommonResponse:
-    record, error, not_found = await create_work_project_evidence_from_traffic_for_user(
+    record = await create_work_project_evidence_from_traffic_for_user(
         id,
         traffic_id,
         request,
         user_id=user.id,
         user_role=user.role,
     )
-    if not_found:
-        raise_api_error(HTTPStatus.NOT_FOUND, error or "Resource not found")
-    if record is None:
-        raise_api_error(HTTPStatus.BAD_REQUEST, error or "Failed to create evidence")
     return CommonResponse(message="HTTP exchange saved as evidence", data=record)

@@ -19,14 +19,6 @@ class SandboxContainerRecord:
 
 
 @dataclass(frozen=True)
-class SandboxContainerMutationResult:
-    record: SandboxContainerRecord | None
-    succeeded: bool
-    message: str = ""
-    not_found: bool = False
-
-
-@dataclass(frozen=True)
 class SandboxContainerCommandResult:
     output: str
     exit_code: int

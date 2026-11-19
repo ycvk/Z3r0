@@ -254,7 +254,9 @@ def _patch_error_contracts(schema: dict[str, Any]) -> None:
         "401": "Unauthorized",
         "403": "Forbidden",
         "404": "Not found",
+        "409": "Conflict",
         "422": "Validation error",
+        "502": "Bad gateway",
     }
     for methods in schema.get("paths", {}).values():
         for operation in methods.values():

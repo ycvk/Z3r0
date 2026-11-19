@@ -3,13 +3,14 @@ from http import HTTPStatus
 from typing import Any
 
 import jwt
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 from starlette.datastructures import Headers
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from config import get_config
+from core.errors import AuthenticationError, ForbiddenError
 from database import get_async_session
 from model.system_user.users import SystemUser
 from schema.common.responses import CommonResponse
@@ -129,13 +130,13 @@ async def resolve_current_user(token_user: AuthUser) -> AuthUser | None:
 async def require_user(request: Request) -> AuthUser:
     user = getattr(request.state, "system_user", None)
     if not isinstance(user, AuthUser):
-        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED.value, detail="Missing access token")
+        raise AuthenticationError("Missing access token")
     return user
 
 
 async def require_admin(user: AuthUser = Depends(require_user)) -> AuthUser:
     if user.role != SystemUserRole.ADMIN:
-        raise HTTPException(status_code=HTTPStatus.FORBIDDEN.value, detail="Admin role required")
+        raise ForbiddenError("Admin role required")
     return user
 
 

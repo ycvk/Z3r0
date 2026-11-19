@@ -14,6 +14,7 @@ from middleware.system_user import require_admin
 from router.common.responses import (
     BAD_REQUEST_RESPONSE,
     COMMON_ERROR_RESPONSES,
+    CONFLICT_RESPONSE,
     not_found_response,
 )
 from schema.common.responses import CommonResponse
@@ -128,7 +129,7 @@ router.add_api_route(
     delete_knowledge_document_route,
     methods=["DELETE"],
     response_model=CommonResponse[DeleteKnowledgeDocumentResponse],
-    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERROR_RESPONSES, **CONFLICT_RESPONSE, **NOT_FOUND_RESPONSE},
 )
 router.add_api_route(
     "/vectors",

@@ -64,15 +64,14 @@ def can_manage_sandbox_container(container: SandboxContainer, user_id: int, user
     return _is_admin(user_role) or container.owner_id == user_id
 
 
-async def sandbox_container_manageability(
+async def can_manage_sandbox_container_by_id(
     container_id: int,
     user_id: int,
     user_role: SystemUserRole,
-) -> bool | None:
-    """Whether the user may manage the container; None when it does not exist."""
+) -> bool:
     async with get_async_session() as session:
         container = await session.get(SandboxContainer, container_id)
-    return None if container is None else can_manage_sandbox_container(container, user_id, user_role)
+    return container is not None and can_manage_sandbox_container(container, user_id, user_role)
 
 
 def can_assign_sandbox_container_owner(owner_id: int, user_id: int, user_role: SystemUserRole) -> bool:

@@ -4,6 +4,7 @@ from sqlalchemy import String, cast, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
+from core.errors import ConflictError, NotFoundError, ValidationError
 from database import get_async_session
 from model.work_project.assets import WorkProjectAsset
 from model.work_project.evidence import WorkProjectEvidence, WorkProjectRelationEvidence
@@ -59,14 +60,13 @@ async def create_work_project_asset(
     origin: WorkProjectAssetOrigin = WorkProjectAssetOrigin.DISCOVERED,
     created_by_agent_code: str = "",
     created_from_session_id: str = "",
-) -> tuple[WorkProjectAssetSchema | None, str]:
+) -> WorkProjectAssetSchema:
     now = datetime.now()
     async with get_async_session() as session:
-        if error := await lock_active_work_project(session, project_id):
-            return None, error
+        await lock_active_work_project(session, project_id)
         existing = await _get_asset_by_identity(session, project_id, request)
         if existing is not None:
-            return None, "Asset already exists"
+            raise ConflictError("Asset already exists")
         asset = WorkProjectAsset(
             project_id=project_id,
             origin=origin,
@@ -79,32 +79,31 @@ async def create_work_project_asset(
         session.add(asset)
         try:
             await session.commit()
-        except IntegrityError:
+        except IntegrityError as exc:
             await session.rollback()
-            return None, "Asset already exists"
+            raise ConflictError("Asset already exists") from exc
         await session.refresh(asset)
-    return WorkProjectAssetSchema.model_validate(asset), ""
+    return WorkProjectAssetSchema.model_validate(asset)
 
 
 async def update_work_project_asset(
     project_id: int,
     asset_id: int,
     request: WorkProjectAssetRequest,
-) -> tuple[WorkProjectAssetSchema | None, str]:
+) -> WorkProjectAssetSchema:
     async with get_async_session() as session:
-        if error := await lock_active_work_project(session, project_id):
-            return None, error
+        await lock_active_work_project(session, project_id)
         asset = (await session.exec(select(WorkProjectAsset).where(WorkProjectAsset.id == asset_id).with_for_update())).one_or_none()
         if asset is None or asset.project_id != project_id:
-            return None, "Asset not found"
+            raise NotFoundError("Asset not found")
         conflict = await _get_asset_by_identity(session, project_id, request)
         if conflict is not None and conflict.id != asset_id:
-            return None, "Asset already exists; merge the duplicate assets instead"
+            raise ConflictError("Asset already exists; merge the duplicate assets instead")
         apply_asset_request(asset, request, datetime.now())
         session.add(asset)
         await session.commit()
         await session.refresh(asset)
-    return WorkProjectAssetSchema.model_validate(asset), ""
+    return WorkProjectAssetSchema.model_validate(asset)
 
 
 async def upsert_work_project_asset(
@@ -113,36 +112,37 @@ async def upsert_work_project_asset(
     *,
     created_by_agent_code: str = "",
     created_from_session_id: str = "",
-) -> tuple[WorkProjectAssetSchema | None, str]:
+) -> WorkProjectAssetSchema:
     async with get_async_session() as session:
         existing = await _get_asset_by_identity(session, project_id, request)
         existing_id = existing.id if existing is not None else None
     if existing_id is not None:
         return await update_work_project_asset(project_id, existing_id, request)
-    saved, error = await create_work_project_asset(
-        project_id,
-        request,
-        created_by_agent_code=created_by_agent_code,
-        created_from_session_id=created_from_session_id,
-    )
-    if error != "Asset already exists":
-        return saved, error
-    async with get_async_session() as session:
-        winner = await _get_asset_by_identity(session, project_id, request)
-        winner_id = winner.id if winner is not None else None
-    return await update_work_project_asset(project_id, winner_id, request) if winner_id else (None, error)
+    try:
+        return await create_work_project_asset(
+            project_id,
+            request,
+            created_by_agent_code=created_by_agent_code,
+            created_from_session_id=created_from_session_id,
+        )
+    except ConflictError:
+        async with get_async_session() as session:
+            winner = await _get_asset_by_identity(session, project_id, request)
+            winner_id = winner.id if winner is not None else None
+        if winner_id is None:
+            raise
+        return await update_work_project_asset(project_id, winner_id, request)
 
 
 async def merge_work_project_assets(
     project_id: int,
     source_asset_id: int,
     target_asset_id: int,
-) -> tuple[WorkProjectAssetSchema | None, str]:
+) -> WorkProjectAssetSchema:
     if source_asset_id == target_asset_id:
-        return None, "Source and target assets must be different"
+        raise ValidationError("Source and target assets must be different")
     async with get_async_session() as session:
-        if error := await lock_active_work_project(session, project_id):
-            return None, error
+        await lock_active_work_project(session, project_id)
         assets = list((await session.exec(
             select(WorkProjectAsset).where(WorkProjectAsset.id.in_({source_asset_id, target_asset_id})).with_for_update()
         )).all())
@@ -150,7 +150,7 @@ async def merge_work_project_assets(
         source = by_id.get(source_asset_id)
         target = by_id.get(target_asset_id)
         if source is None or target is None or source.project_id != project_id or target.project_id != project_id:
-            return None, "Asset not found"
+            raise NotFoundError("Asset not found")
         source_path_ids = set((await session.exec(select(WorkProjectAttackPathStep.path_id).where(
             WorkProjectAttackPathStep.project_id == project_id,
             or_(
@@ -166,7 +166,7 @@ async def merge_work_project_assets(
             ),
         ))).all())
         if source_path_ids & target_path_ids:
-            return None, "Asset merge would collapse distinct nodes in an attack path; revise the path first"
+            raise ValidationError("Asset merge would collapse distinct nodes in an attack path; revise the path first")
 
         await session.execute(update(WorkProjectEvidence).where(WorkProjectEvidence.primary_asset_id == source_asset_id).values(primary_asset_id=target_asset_id))
         await session.execute(update(WorkProjectFinding).where(WorkProjectFinding.primary_asset_id == source_asset_id).values(primary_asset_id=target_asset_id))
@@ -233,11 +233,11 @@ async def merge_work_project_assets(
         await session.delete(source)
         try:
             await session.commit()
-        except IntegrityError:
+        except IntegrityError as exc:
             await session.rollback()
-            return None, "Asset merge conflicts with an existing project reference"
+            raise ConflictError("Asset merge conflicts with an existing project reference") from exc
         await session.refresh(target)
-    return WorkProjectAssetSchema.model_validate(target), ""
+    return WorkProjectAssetSchema.model_validate(target)
 
 
 def apply_asset_request(asset: WorkProjectAsset, request: WorkProjectAssetRequest, now: datetime) -> None:

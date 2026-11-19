@@ -1,12 +1,10 @@
 import asyncio
-from http import HTTPStatus
 
 from fastapi.websockets import WebSocketState
 from fastapi import WebSocket, WebSocketDisconnect, status as ws_status
 from fastapi.responses import FileResponse
 
 from core.runtime.session import get_agent_pool
-from handler.common.http import raise_api_error
 from handler.common.websocket import (
     authenticate_ws_token,
     cancel_ws_task as _cancel_task,
@@ -25,8 +23,8 @@ from schema.agent.sessions import (
     UpdateAgentSessionTitleRequest,
 )
 from schema.common.responses import CommonResponse
-from service.agent import runtime as agent_runtime
 from service.agent import reports as agent_reports
+from service.agent import runtime as agent_runtime
 from service.agent import sessions as agent_sessions
 from service.common.access import can_access_agent_session
 from service.common.pagination import paginated_payload
@@ -39,16 +37,12 @@ async def create_agent_session_turn_handler(
     request: AgentTurnRequest,
     user: AuthUser,
 ) -> CommonResponse[AgentTurnResponse]:
-    try:
-        session_id, events = await agent_runtime.submit_new_chat_turn(
-            content=request.content,
-            user=user,
-            sandbox_container_id=request.sandbox_container_id,
-            requested_agent_code=request.agent_code,
-        )
-    except Exception as exc:
-        _raise_runtime_error(exc)
-        raise
+    session_id, events = await agent_runtime.submit_new_chat_turn(
+        content=request.content,
+        user=user,
+        sandbox_container_id=request.sandbox_container_id,
+        requested_agent_code=request.agent_code,
+    )
     return await _turn_response(session_id, user, events)
 
 
@@ -57,46 +51,32 @@ async def submit_agent_session_turn_handler(
     request: AgentTurnRequest,
     user: AuthUser,
 ) -> CommonResponse[AgentTurnResponse]:
-    try:
-        events = await agent_runtime.submit_user_turn(
-            session_id=session_id,
-            content=request.content,
-            user=user,
-            sandbox_container_id=request.sandbox_container_id,
-            requested_agent_code=request.agent_code,
-        )
-    except Exception as exc:
-        _raise_runtime_error(exc)
-        raise
+    events = await agent_runtime.submit_user_turn(
+        session_id=session_id,
+        content=request.content,
+        user=user,
+        sandbox_container_id=request.sandbox_container_id,
+        requested_agent_code=request.agent_code,
+    )
     return await _turn_response(session_id, user, events)
 
 
 async def interrupt_agent_session_handler(session_id: str, user: AuthUser) -> CommonResponse[AgentTurnResponse]:
-    try:
-        events = await agent_runtime.interrupt_turn(session_id=session_id, user=user)
-    except Exception as exc:
-        _raise_runtime_error(exc)
-        raise
+    events = await agent_runtime.interrupt_turn(session_id=session_id, user=user)
     return await _turn_response(session_id, user, events)
 
 
 async def cancel_agent_session_tasks_handler(session_id: str, user: AuthUser) -> CommonResponse[AgentTurnResponse]:
-    try:
-        events = await agent_runtime.cancel_all_tasks(session_id=session_id, user=user)
-    except Exception as exc:
-        _raise_runtime_error(exc)
-        raise
+    events = await agent_runtime.cancel_all_tasks(session_id=session_id, user=user)
     return await _turn_response(session_id, user, events)
 
 
 async def delete_agent_session_handler(session_id: str, user: AuthUser) -> CommonResponse[None]:
-    deleted = await agent_sessions.delete_session(
+    await agent_sessions.delete_session_for_user(
         session_id,
         user_id=user.id,
         user_role=user.role,
     )
-    if not deleted:
-        raise_api_error(HTTPStatus.NOT_FOUND, "Agent session not found")
     return CommonResponse(message="Agent session deleted")
 
 
@@ -111,8 +91,6 @@ async def update_agent_session_title_handler(
         user_id=user.id,
         user_role=user.role,
     )
-    if session is None:
-        raise_api_error(HTTPStatus.NOT_FOUND, "Agent session not found")
     return CommonResponse(message="Agent session title updated", data=session)
 
 
@@ -121,15 +99,11 @@ async def update_agent_session_sandbox_container_handler(
     request: UpdateAgentSessionSandboxContainerRequest,
     user: AuthUser,
 ) -> CommonResponse[AgentSessionSummarySchema]:
-    try:
-        session = await agent_runtime.update_selected_sandbox_container(
-            session_id=session_id,
-            sandbox_container_id=request.sandbox_container_id,
-            user=user,
-        )
-    except Exception as exc:
-        _raise_runtime_error(exc)
-        raise
+    session = await agent_runtime.update_selected_sandbox_container(
+        session_id=session_id,
+        sandbox_container_id=request.sandbox_container_id,
+        user=user,
+    )
     return CommonResponse(message="Sandbox container updated", data=session)
 
 
@@ -155,16 +129,13 @@ async def list_agent_events_handler(
     before_seq: int | None = None,
     limit: int = agent_sessions.DEFAULT_REPLAY_EVENT_PAGE_SIZE,
 ) -> CommonResponse[ListAgentEventsResponse]:
-    result = await agent_sessions.replay_session_events_page(
+    events, has_more, next_before_seq = await agent_sessions.replay_session_events_page(
         session_id=session_id,
         user_id=user.id,
         user_role=user.role,
         before_seq=before_seq,
         limit=limit,
     )
-    if result is None:
-        raise_api_error(HTTPStatus.NOT_FOUND, "Agent session not found")
-    events, has_more, next_before_seq = result
     return CommonResponse(data=ListAgentEventsResponse(
         session_id=session_id,
         items=events,
@@ -174,17 +145,11 @@ async def list_agent_events_handler(
 
 
 async def download_agent_report_handler(report_id: str, user: AuthUser) -> FileResponse:
-    try:
-        report_path = agent_reports.resolve_report_download_path(report_id)
-    except ValueError as exc:
-        raise_api_error(HTTPStatus.BAD_REQUEST, str(exc))
-    except FileNotFoundError as exc:
-        raise_api_error(HTTPStatus.NOT_FOUND, str(exc))
-
-    session_id = agent_reports.report_session_id(report_path)
-    if not session_id or not await can_access_agent_session(session_id, user.id, user.role):
-        raise_api_error(HTTPStatus.NOT_FOUND, "Report file not found")
-
+    report_path = await agent_reports.resolve_accessible_report_path(
+        report_id,
+        user_id=user.id,
+        user_role=user.role,
+    )
     return FileResponse(
         report_path,
         media_type="text/markdown; charset=utf-8",
@@ -314,19 +279,4 @@ async def _turn_response(
         user_id=user.id,
         user_role=user.role,
     )
-    if summary is None:
-        raise_api_error(HTTPStatus.NOT_FOUND, "Agent session not found")
     return CommonResponse(data=AgentTurnResponse(session_id=session_id, session=summary, events=events))
-
-
-def _raise_runtime_error(exc: Exception) -> None:
-    if isinstance(exc, agent_runtime.SessionNotRunnableError):
-        raise_api_error(HTTPStatus.BAD_REQUEST, "Work project is canceled")
-    if isinstance(exc, agent_runtime.SandboxContainerUnavailableError):
-        raise_api_error(HTTPStatus.BAD_REQUEST, str(exc))
-    if isinstance(exc, agent_runtime.AgentUnavailableError):
-        raise_api_error(HTTPStatus.BAD_REQUEST, str(exc))
-    if isinstance(exc, agent_runtime.SessionBusyError):
-        raise_api_error(HTTPStatus.CONFLICT, str(exc))
-    if isinstance(exc, PermissionError):
-        raise_api_error(HTTPStatus.NOT_FOUND, "Agent session not found")

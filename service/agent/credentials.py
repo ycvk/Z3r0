@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy import or_
 from sqlmodel import col, select
 
+from core.errors import ValidationError
 from database import get_async_session
 from model.agent.credentials import SessionCredential
 from model.agent.sessions import AgentSessionMeta
@@ -52,9 +53,9 @@ async def upsert_credential(
     norm_secret = secret.strip()
     norm_note = note.strip()[:500]
     if not norm_target:
-        raise ValueError("credential target is required")
+        raise ValidationError("credential target is required")
     if not norm_secret:
-        raise ValueError("credential secret is required")
+        raise ValidationError("credential secret is required")
 
     now = datetime.now()
     async with get_async_session() as session:

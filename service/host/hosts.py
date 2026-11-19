@@ -1,12 +1,14 @@
 import asyncio
 import getpass
-from dataclasses import dataclass
 from datetime import datetime
 
+from docker.errors import ImageNotFound
 from sqlalchemy import String, cast, or_, text
 from sqlmodel import select
 
+from core.errors import NotFoundError, UpstreamError, ValidationError
 from database import get_async_session
+from logger import get_logger
 from model.host.hosts import ManagedHost
 from model.sandbox.containers import SandboxContainer
 from schema.host.hosts import ManagedHostImageSchema, PullManagedHostImageResultSchema
@@ -14,22 +16,10 @@ from service.common.pagination import Page, RESOURCE_PAGE_SIZE, paginate_stateme
 from service.host.docker import list_host_images_sync, pull_host_images_sync, remove_host_image_sync
 
 
+logger = get_logger(__name__)
+
 DEFAULT_LOCAL_HOST_ID = 1
 _IMAGE_PULL_BATCH_SIZE = 4
-
-
-@dataclass(frozen=True)
-class DeleteManagedHostResult:
-    deleted: bool
-    not_found: bool = False
-    message: str = ""
-
-
-@dataclass(frozen=True)
-class UpdateManagedHostResult:
-    host: ManagedHost | None
-    not_found: bool = False
-    message: str = ""
 
 
 async def create_managed_host(
@@ -77,13 +67,13 @@ async def update_managed_host(
     docker_client_ca_cert: str | None = None,
     docker_client_cert: str | None = None,
     docker_client_key: str | None = None,
-) -> UpdateManagedHostResult:
+) -> ManagedHost:
     async with get_async_session() as session:
         host = (await session.exec(
             select(ManagedHost).where(ManagedHost.id == id).with_for_update()
         )).one_or_none()
         if host is None:
-            return UpdateManagedHostResult(host=None, not_found=True, message="Managed host not found")
+            raise NotFoundError("Managed host not found")
 
         next_docker_tls_enabled = (
             docker_tls_enabled if docker_tls_enabled is not None else host.docker_tls_enabled
@@ -108,10 +98,7 @@ async def update_managed_host(
             next_docker_client_cert = ""
             next_docker_client_key = ""
         elif not all((next_docker_client_ca_cert, next_docker_client_cert, next_docker_client_key)):
-            return UpdateManagedHostResult(
-                host=host,
-                message="Docker TLS CA certificate, client certificate, and client key are required",
-            )
+            raise ValidationError("Docker TLS CA certificate, client certificate, and client key are required")
 
         docker_connection_changed = _docker_connection_changed(
             host=host,
@@ -123,10 +110,7 @@ async def update_managed_host(
             docker_client_key=next_docker_client_key,
         )
         if docker_connection_changed and await _host_has_sandbox_containers(session, id):
-            return UpdateManagedHostResult(
-                host=host,
-                message="Host Docker connection is used by sandbox containers",
-            )
+            raise ValidationError("Host Docker connection is used by sandbox containers")
 
         if ip_address is not None:
             host.ip_address = ip_address
@@ -148,28 +132,23 @@ async def update_managed_host(
         await session.commit()
         await session.refresh(host)
 
-    return UpdateManagedHostResult(host=host)
+    return host
 
 
-async def delete_managed_host(id: int) -> DeleteManagedHostResult:
+async def delete_managed_host(id: int) -> None:
     if id == DEFAULT_LOCAL_HOST_ID:
-        return DeleteManagedHostResult(deleted=False, message="Default local host cannot be deleted")
+        raise ValidationError("Default local host cannot be deleted")
     async with get_async_session() as session:
         host = (await session.exec(
             select(ManagedHost).where(ManagedHost.id == id).with_for_update()
         )).one_or_none()
         if host is None:
-            return DeleteManagedHostResult(deleted=False, not_found=True, message="Managed host not found")
+            raise NotFoundError("Managed host not found")
         if await _host_has_sandbox_containers(session, id):
-            return DeleteManagedHostResult(
-                deleted=False,
-                message="Managed host is used by sandbox containers",
-            )
+            raise ValidationError("Managed host is used by sandbox containers")
 
         await session.delete(host)
         await session.commit()
-
-    return DeleteManagedHostResult(deleted=True)
 
 
 async def query_managed_hosts(
@@ -252,36 +231,45 @@ def _detect_local_username() -> str:
         return ""
 
 
-async def list_managed_host_images(id: int) -> list[ManagedHostImageSchema] | None:
+async def list_managed_host_images(id: int) -> list[ManagedHostImageSchema]:
     host = await query_managed_host_by_id(id)
     if host is None:
-        return None
-    return await asyncio.to_thread(list_host_images_sync, host)
+        raise NotFoundError("Managed host not found")
+    try:
+        return await asyncio.to_thread(list_host_images_sync, host)
+    except Exception as exc:
+        logger.warning("List host images failed: id=%s error=%s", id, exc)
+        raise UpstreamError("Failed to connect to the Docker host") from exc
 
 
-async def pull_managed_host_images(id: int, image_names: list[str]) -> list[PullManagedHostImageResultSchema] | None:
+async def pull_managed_host_images(id: int, image_names: list[str]) -> list[PullManagedHostImageResultSchema]:
     host = await query_managed_host_by_id(id)
     if host is None:
-        return None
+        raise NotFoundError("Managed host not found")
     results: list[PullManagedHostImageResultSchema] = []
-    for offset in range(0, len(image_names), _IMAGE_PULL_BATCH_SIZE):
-        groups = await asyncio.gather(*(
-            asyncio.to_thread(pull_host_images_sync, host, [image_name])
-            for image_name in image_names[offset:offset + _IMAGE_PULL_BATCH_SIZE]
-        ))
-        results.extend(item for group in groups for item in group)
+    try:
+        for offset in range(0, len(image_names), _IMAGE_PULL_BATCH_SIZE):
+            groups = await asyncio.gather(*(
+                asyncio.to_thread(pull_host_images_sync, host, [image_name])
+                for image_name in image_names[offset:offset + _IMAGE_PULL_BATCH_SIZE]
+            ))
+            results.extend(item for group in groups for item in group)
+    except Exception as exc:
+        logger.warning("Pull host images failed: id=%s error=%s", id, exc)
+        raise UpstreamError("Failed to connect to the Docker host") from exc
     return results
 
 
-async def delete_managed_host_image(id: int, image_id: str, force: bool = False) -> str | None:
+async def delete_managed_host_image(id: int, image_id: str, force: bool = False) -> None:
     host = await query_managed_host_by_id(id)
     if host is None:
-        return "Managed host not found"
+        raise NotFoundError("Managed host not found")
     try:
         await asyncio.to_thread(remove_host_image_sync, host, image_id, force)
+    except ImageNotFound as exc:
+        raise NotFoundError(str(exc).strip() or "Image not found") from exc
     except Exception as exc:
-        return str(exc).strip() or "Failed to remove image"
-    return None
+        raise ValidationError(str(exc).strip() or "Failed to remove image") from exc
 
 
 async def _host_has_sandbox_containers(session, host_id: int) -> bool:

@@ -6,10 +6,24 @@ from typing import BinaryIO
 
 import httpx
 
-from schema.sandbox.containers import ContainerFileInfo, ContainerFileUploadItem, SandboxContainerStatus
-from service.sandbox.control_proxy import SandboxControlProxyTarget, resolve_sandbox_control_proxy_target, sandbox_control_proxy_token_headers
+from core.errors import ConflictError, DomainError, NotFoundError, UpstreamError, ValidationError
+from logger import get_logger
+from schema.sandbox.containers import (
+    ContainerFileInfo,
+    ContainerFileType,
+    ContainerFileUploadItem,
+    SandboxContainerStatus,
+)
+from schema.system_user.users import SystemUserRole
+from service.common.access import can_manage_sandbox_container_by_id
+from service.sandbox.control_proxy import (
+    SandboxControlProxyTarget,
+    resolve_sandbox_control_proxy_target,
+    sandbox_control_proxy_token_headers,
+)
 
 
+logger = get_logger(__name__)
 _http_client: httpx.AsyncClient | None = None
 
 
@@ -40,34 +54,58 @@ async def close_file_http_client() -> None:
         _http_client = None
 
 
-async def resolve_file_container_status(id: int) -> SandboxContainerStatus | None:
-    target = await resolve_sandbox_control_proxy_target(id)
+async def require_running_file_container(
+    container_id: int,
+    *,
+    action: str,
+    user_id: int,
+    user_role: SystemUserRole,
+) -> None:
+    if not await can_manage_sandbox_container_by_id(container_id, user_id, user_role):
+        raise NotFoundError("Sandbox container not found")
+    target = await resolve_sandbox_control_proxy_target(container_id)
     if target is None:
-        return None
-    return target.status
+        raise NotFoundError("Sandbox container not found")
+    if target.status != SandboxContainerStatus.RUNNING:
+        raise ValidationError(f"Only running sandbox containers can {action}")
 
 
 async def list_container_files(container_id: int, path: str) -> list[ContainerFileInfo]:
-    payload = await _request_json(container_id, "GET", "/files", params={"path": path})
+    payload = await _request_json(
+        container_id, "GET", "/files", operation="list container files", params={"path": path}
+    )
     files = payload.get("files", [])
     return [ContainerFileInfo.model_validate(file) for file in files if isinstance(file, dict)]
 
 
 async def get_container_file_info(container_id: int, path: str) -> ContainerFileInfo | None:
-    payload = await _request_json(container_id, "GET", "/files/info", params={"path": path})
+    payload = await _request_json(
+        container_id, "GET", "/files/info", operation="get container file info", params={"path": path}
+    )
     info = payload.get("file")
     return ContainerFileInfo.model_validate(info) if isinstance(info, dict) else None
 
 
-async def read_container_file(container_id: int, path: str, max_bytes: int = 1_048_576, *, base64_mode: bool = False) -> str:
+async def read_container_file(
+    container_id: int,
+    path: str,
+    max_bytes: int = 1_048_576,
+    *,
+    base64_mode: bool = False,
+) -> tuple[str, int]:
+    info = await get_container_file_info(container_id, path)
+    if info is None:
+        raise NotFoundError("File not found")
+    if info.type == ContainerFileType.DIRECTORY:
+        raise ValidationError("Cannot read a directory")
     payload = await _request_json(
         container_id,
         "GET",
         "/files/read",
+        operation="read container file",
         params={"path": path, "max_bytes": str(max_bytes), "base64": str(base64_mode).lower()},
     )
-    content = payload.get("content", "")
-    return str(content)
+    return str(payload.get("content", "")), info.size
 
 
 async def upload_container_files(
@@ -76,6 +114,8 @@ async def upload_container_files(
     sources: list[ContainerUploadSource],
     overwrite: bool,
 ) -> list[ContainerFileUploadItem]:
+    if not sources:
+        raise ValidationError("No files uploaded")
     files = []
     try:
         for source in sources:
@@ -84,6 +124,7 @@ async def upload_container_files(
             container_id,
             "POST",
             "/files/upload",
+            operation="upload container files",
             data={"path": path, "overwrite": str(overwrite).lower()},
             files=files,
         )
@@ -95,19 +136,26 @@ async def upload_container_files(
 
 
 async def download_container_paths(container_id: int, paths: list[str]) -> ContainerDownloadStream:
+    if not paths:
+        raise ValidationError("Download path is required")
+    operation = "download container files"
     target = await _resolve_running_target(container_id)
     if target is None:
-        raise FileNotFoundError("Sandbox container not found")
-    params = [("path", path) for path in paths]
-    stream = _get_http_client().stream(
-        "GET",
-        f"{target.base_url}/files/download",
-        params=params,
-        headers=sandbox_control_proxy_token_headers(target),
-    )
-    response = await stream.__aenter__()
+        raise NotFoundError("Sandbox container not found")
+    params = tuple(("path", path) for path in paths)
     try:
-        await _raise_for_control_proxy_stream_response(response)
+        stream = _get_http_client().stream(
+            "GET",
+            f"{target.base_url}/files/download",
+            params=params,
+            headers=sandbox_control_proxy_token_headers(target),
+        )
+        response = await stream.__aenter__()
+    except (httpx.HTTPError, OSError) as exc:
+        logger.warning("Sandbox control proxy operation failed: container=%s operation=%s", container_id, operation)
+        raise UpstreamError(f"Failed to {operation}") from exc
+    try:
+        await _raise_for_control_proxy_stream_response(response, container_id, operation)
     except Exception:
         await stream.__aexit__(None, None, None)
         raise
@@ -119,29 +167,42 @@ async def download_container_paths(container_id: int, paths: list[str]) -> Conta
     )
 
 
-async def write_container_file(container_id: int, path: str, content: str) -> bool:
-    await _request_json(container_id, "POST", "/files/write", json={"path": path, "content": content})
-    return True
+async def write_container_file(container_id: int, path: str, content: str) -> None:
+    await _request_json(
+        container_id, "POST", "/files/write", operation="write container file", json={"path": path, "content": content}
+    )
 
 
-async def copy_container_files(container_id: int, sources: list[str], destination: str) -> bool:
-    await _request_json(container_id, "POST", "/files/copy", json={"sources": sources, "destination": destination})
-    return True
+async def copy_container_files(container_id: int, sources: list[str], destination: str) -> None:
+    await _request_json(
+        container_id,
+        "POST",
+        "/files/copy",
+        operation="copy container files",
+        json={"sources": sources, "destination": destination},
+    )
 
 
-async def move_container_files(container_id: int, sources: list[str], destination: str) -> bool:
-    await _request_json(container_id, "POST", "/files/move", json={"sources": sources, "destination": destination})
-    return True
+async def move_container_files(container_id: int, sources: list[str], destination: str) -> None:
+    await _request_json(
+        container_id,
+        "POST",
+        "/files/move",
+        operation="move container files",
+        json={"sources": sources, "destination": destination},
+    )
 
 
-async def delete_container_files(container_id: int, paths: list[str]) -> bool:
-    await _request_json(container_id, "POST", "/files/delete", json={"paths": paths})
-    return True
+async def delete_container_files(container_id: int, paths: list[str]) -> None:
+    await _request_json(
+        container_id, "POST", "/files/delete", operation="delete container files", json={"paths": paths}
+    )
 
 
-async def create_container_directory(container_id: int, path: str) -> bool:
-    await _request_json(container_id, "POST", "/files/mkdir", json={"path": path})
-    return True
+async def create_container_directory(container_id: int, path: str) -> None:
+    await _request_json(
+        container_id, "POST", "/files/mkdir", operation="create container directory", json={"path": path}
+    )
 
 
 async def _request_json(
@@ -149,6 +210,7 @@ async def _request_json(
     method: str,
     path: str,
     *,
+    operation: str,
     params: dict[str, str] | None = None,
     json: dict | None = None,
     data: dict | None = None,
@@ -156,21 +218,24 @@ async def _request_json(
 ) -> dict:
     target = await _resolve_running_target(container_id)
     if target is None:
-        raise FileNotFoundError("Sandbox container not found")
-    response = await _get_http_client().request(
-        method,
-        f"{target.base_url}{path}",
-        params=params,
-        json=json,
-        data=data,
-        files=files,
-        headers=sandbox_control_proxy_token_headers(target),
-    )
-    _raise_for_control_proxy_response(response)
+        raise NotFoundError("Sandbox container not found")
     try:
+        response = await _get_http_client().request(
+            method,
+            f"{target.base_url}{path}",
+            params=params,
+            json=json,
+            data=data,
+            files=files,
+            headers=sandbox_control_proxy_token_headers(target),
+        )
+        _raise_for_control_proxy_response(response, container_id, operation)
         payload = response.json()
-    except json_module.JSONDecodeError as exc:
-        raise RuntimeError("Invalid sandbox control proxy response") from exc
+    except DomainError:
+        raise
+    except (httpx.HTTPError, OSError, json_module.JSONDecodeError) as exc:
+        logger.warning("Sandbox control proxy operation failed: container=%s operation=%s", container_id, operation)
+        raise UpstreamError(f"Failed to {operation}") from exc
     return payload if isinstance(payload, dict) else {}
 
 
@@ -178,25 +243,37 @@ async def _resolve_running_target(container_id: int) -> SandboxControlProxyTarge
     return await resolve_sandbox_control_proxy_target(container_id, require_running=True)
 
 
-def _raise_for_control_proxy_response(response: httpx.Response) -> None:
+def _raise_for_control_proxy_response(response: httpx.Response, container_id: int, operation: str) -> None:
+    if response.status_code < 400:
+        return
+    message = response.text.strip()
     if response.status_code == 404:
-        raise FileNotFoundError("Path not found")
+        raise NotFoundError(message or "Path not found")
     if response.status_code == 409:
-        raise FileExistsError(response.text)
-    if response.status_code >= 400:
-        raise RuntimeError(response.text or "Sandbox control proxy request failed")
+        raise ConflictError(message or "Path already exists")
+    if response.status_code == 400:
+        raise ValidationError(message or f"Failed to {operation}")
+    logger.warning("Sandbox control proxy operation failed: container=%s operation=%s", container_id, operation)
+    raise UpstreamError(f"Failed to {operation}")
 
 
-async def _raise_for_control_proxy_stream_response(response: httpx.Response) -> None:
-    if response.status_code == 404:
-        raise FileNotFoundError("Path not found")
+async def _raise_for_control_proxy_stream_response(
+    response: httpx.Response,
+    container_id: int,
+    operation: str,
+) -> None:
     if response.status_code < 400:
         return
     content = await response.aread()
-    message = content.decode(errors="replace") if content else "Sandbox control proxy request failed"
+    message = content.decode(errors="replace").strip() if content else ""
+    if response.status_code == 404:
+        raise NotFoundError(message or "Path not found")
     if response.status_code == 409:
-        raise FileExistsError(message)
-    raise RuntimeError(message)
+        raise ConflictError(message or "Path already exists")
+    if response.status_code == 400:
+        raise ValidationError(message or f"Failed to {operation}")
+    logger.warning("Sandbox control proxy operation failed: container=%s operation=%s", container_id, operation)
+    raise UpstreamError(f"Failed to {operation}")
 
 
 async def _stream_response_bytes(response: httpx.Response, stream) -> AsyncIterator[bytes]:

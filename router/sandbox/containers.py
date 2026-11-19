@@ -60,7 +60,6 @@ NOT_FOUND_RESPONSE = not_found_response("Sandbox container")
 CREATE_NOT_FOUND_RESPONSE = not_found_response("Sandbox image")
 FILE_OPERATION_ERROR_RESPONSES = {
     **COMMON_ERROR_RESPONSES,
-    **FORBIDDEN_RESPONSE,
     **NOT_FOUND_RESPONSE,
     **BAD_REQUEST_RESPONSE,
     **INTERNAL_ERROR_RESPONSE,
@@ -216,7 +215,7 @@ router.add_api_route(
     delete_sandbox_container_route,
     methods=["DELETE"],
     response_model=CommonResponse[DeleteSandboxContainerResponse],
-    responses={**COMMON_ERROR_RESPONSES, **FORBIDDEN_RESPONSE, **NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE},
 )
 
 router.add_api_route(
@@ -224,7 +223,7 @@ router.add_api_route(
     start_sandbox_container_route,
     methods=["POST"],
     response_model=CommonResponse[SandboxContainerSchema],
-    responses={**COMMON_ERROR_RESPONSES, **FORBIDDEN_RESPONSE, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERROR_RESPONSES, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
 )
 
 router.add_api_route(
@@ -232,7 +231,7 @@ router.add_api_route(
     stop_sandbox_container_route,
     methods=["POST"],
     response_model=CommonResponse[SandboxContainerSchema],
-    responses={**COMMON_ERROR_RESPONSES, **FORBIDDEN_RESPONSE, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERROR_RESPONSES, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
 )
 
 router.add_api_route(
@@ -240,7 +239,7 @@ router.add_api_route(
     pause_sandbox_container_route,
     methods=["POST"],
     response_model=CommonResponse[SandboxContainerSchema],
-    responses={**COMMON_ERROR_RESPONSES, **FORBIDDEN_RESPONSE, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERROR_RESPONSES, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
 )
 
 router.add_api_route(
@@ -248,7 +247,7 @@ router.add_api_route(
     resume_sandbox_container_route,
     methods=["POST"],
     response_model=CommonResponse[SandboxContainerSchema],
-    responses={**COMMON_ERROR_RESPONSES, **FORBIDDEN_RESPONSE, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERROR_RESPONSES, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
 )
 
 router.add_api_route(
@@ -256,7 +255,7 @@ router.add_api_route(
     update_sandbox_container_egress_route,
     methods=["PATCH"],
     response_model=CommonResponse[SandboxContainerSchema],
-    responses={**COMMON_ERROR_RESPONSES, **FORBIDDEN_RESPONSE, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERROR_RESPONSES, **BAD_REQUEST_RESPONSE, **NOT_FOUND_RESPONSE},
 )
 
 router.add_api_route(

@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
 from core.agent.constants import DEFAULT_AGENT_CODE
+from core.errors import ConflictError, NotFoundError, ValidationError
 from database import get_async_session
 from model.work_project.assets import WorkProjectAsset
 from model.work_project.evidence import WorkProjectAttackPathStepEvidence, WorkProjectRelationEvidence
@@ -111,18 +112,15 @@ async def upsert_work_project_relation(
     relation_id: int | None = None,
     created_by_agent_code: str = "",
     created_from_session_id: str = "",
-) -> tuple[WorkProjectRelationSchema | None, str]:
+) -> WorkProjectRelationSchema:
     async with get_async_session() as session:
-        if error := await lock_active_work_project(session, project_id):
-            return None, error
-        error = await _validate_relation_request(session, project_id, request)
-        if error:
-            return None, error
+        await lock_active_work_project(session, project_id)
+        await _validate_relation_request(session, project_id, request)
         relation = None
         if relation_id is not None:
             relation = (await session.exec(select(WorkProjectRelation).where(WorkProjectRelation.id == relation_id).with_for_update())).one_or_none()
             if relation is None or relation.project_id != project_id:
-                return None, "Relation not found"
+                raise NotFoundError("Relation not found")
         else:
             relation = (await session.exec(select(WorkProjectRelation).where(
                 WorkProjectRelation.project_id == project_id,
@@ -132,7 +130,7 @@ async def upsert_work_project_relation(
             ).with_for_update())).one_or_none()
         actor_code = created_by_agent_code.strip()
         if relation is not None and actor_code != DEFAULT_AGENT_CODE and relation.created_by_agent_code != actor_code:
-            return None, "Specialist agents can only update relations they created"
+            raise ValidationError("Specialist agents can only update relations they created")
         if relation is not None:
             linked_steps = list((await session.exec(select(WorkProjectAttackPathStep).where(
                 WorkProjectAttackPathStep.relation_id == relation.id
@@ -142,14 +140,14 @@ async def upsert_work_project_relation(
                     step.source_asset_id,
                     step.target_asset_id,
                 ):
-                    return None, "Relation endpoints must continue to match every attack path step that references it"
+                    raise ValidationError("Relation endpoints must continue to match every attack path step that references it")
                 if request.status == WorkProjectAssertionStatus.REFUTED and step.status != WorkProjectAttackStepStatus.REFUTED:
-                    return None, "Revise non-refuted attack path steps before refuting their linked relation"
+                    raise ValidationError("Revise non-refuted attack path steps before refuting their linked relation")
                 if step.status == WorkProjectAttackStepStatus.VALIDATED and request.status not in {
                     WorkProjectAssertionStatus.OBSERVED,
                     WorkProjectAssertionStatus.VALIDATED,
                 }:
-                    return None, "Validated attack path steps require an observed or validated linked relation"
+                    raise ValidationError("Validated attack path steps require an observed or validated linked relation")
         now = datetime.now()
         if relation is None:
             relation = WorkProjectRelation(
@@ -167,9 +165,9 @@ async def upsert_work_project_relation(
         session.add(relation)
         try:
             await session.flush()
-        except IntegrityError:
+        except IntegrityError as exc:
             await session.rollback()
-            return None, "Relation already exists"
+            raise ConflictError("Relation already exists") from exc
         relation_id_value = relation.id or 0
         await session.execute(sa_delete(WorkProjectRelationEvidence).where(WorkProjectRelationEvidence.relation_id == relation_id_value))
         session.add_all([
@@ -178,7 +176,7 @@ async def upsert_work_project_relation(
         ])
         await session.commit()
         await session.refresh(relation)
-    return WorkProjectRelationSchema.model_validate(relation), ""
+    return WorkProjectRelationSchema.model_validate(relation)
 
 
 async def save_work_project_attack_path(
@@ -188,21 +186,18 @@ async def save_work_project_attack_path(
     path_id: int | None = None,
     created_by_agent_code: str = "",
     created_from_session_id: str = "",
-) -> tuple[WorkProjectAttackPathSchema | None, list[WorkProjectAttackPathStepSchema], str]:
+) -> tuple[WorkProjectAttackPathSchema, list[WorkProjectAttackPathStepSchema]]:
     async with get_async_session() as session:
-        if error := await lock_active_work_project(session, project_id):
-            return None, [], error
-        error = await _validate_path_request(session, project_id, request)
-        if error:
-            return None, [], error
+        await lock_active_work_project(session, project_id)
+        await _validate_path_request(session, project_id, request)
         path = None
         if path_id is not None:
             path = (await session.exec(select(WorkProjectAttackPath).where(WorkProjectAttackPath.id == path_id).with_for_update())).one_or_none()
             if path is None or path.project_id != project_id:
-                return None, [], "Attack path not found"
+                raise NotFoundError("Attack path not found")
             actor_code = created_by_agent_code.strip()
             if actor_code != DEFAULT_AGENT_CODE and path.created_by_agent_code != actor_code:
-                return None, [], "Specialist agents can only update attack paths they created"
+                raise ValidationError("Specialist agents can only update attack paths they created")
         now = datetime.now()
         if path is None:
             path = WorkProjectAttackPath(
@@ -267,58 +262,50 @@ async def save_work_project_attack_path(
     return (
         WorkProjectAttackPathSchema.model_validate(path),
         [WorkProjectAttackPathStepSchema.model_validate(step) for step in saved_steps],
-        "",
     )
 
 
-async def _validate_relation_request(session, project_id: int, request: WorkProjectRelationRequest) -> str:
-    if error := await _validate_assets(session, project_id, [request.source_asset_id, request.target_asset_id]):
-        return error
-    _, error = await validate_active_evidence_ids(session, project_id, request.evidence_ids)
-    return error
+async def _validate_relation_request(session, project_id: int, request: WorkProjectRelationRequest) -> None:
+    await _validate_assets(session, project_id, [request.source_asset_id, request.target_asset_id])
+    await validate_active_evidence_ids(session, project_id, request.evidence_ids)
 
 
-async def _validate_path_request(session, project_id: int, request: WorkProjectAttackPathRequest) -> str:
+async def _validate_path_request(session, project_id: int, request: WorkProjectAttackPathRequest) -> None:
     asset_ids = {request.entry_asset_id, request.target_asset_id}
     for step in request.steps:
         asset_ids.update((step.source_asset_id, step.target_asset_id))
-    if error := await _validate_assets(session, project_id, list(asset_ids)):
-        return error
+    await _validate_assets(session, project_id, list(asset_ids))
     for step in request.steps:
         if step.relation_id is not None:
             relation = await session.get(WorkProjectRelation, step.relation_id)
             if relation is None or relation.project_id != project_id:
-                return "Relation not found"
+                raise NotFoundError("Relation not found")
             if (relation.source_asset_id, relation.target_asset_id) != (step.source_asset_id, step.target_asset_id):
-                return "Attack path step relation endpoints do not match the step"
+                raise ValidationError("Attack path step relation endpoints do not match the step")
             if relation.status == WorkProjectAssertionStatus.REFUTED and step.status != WorkProjectAttackStepStatus.REFUTED:
-                return "Non-refuted attack path step cannot reference a refuted relation"
+                raise ValidationError("Non-refuted attack path step cannot reference a refuted relation")
             if step.status == WorkProjectAttackStepStatus.VALIDATED and relation.status not in {
                 WorkProjectAssertionStatus.OBSERVED,
                 WorkProjectAssertionStatus.VALIDATED,
             }:
-                return "Validated attack path step requires an observed or validated linked relation"
+                raise ValidationError("Validated attack path step requires an observed or validated linked relation")
         if step.finding_id is not None:
             finding = await session.get(WorkProjectFinding, step.finding_id)
             if finding is None or finding.project_id != project_id:
-                return "Finding not found"
+                raise NotFoundError("Finding not found")
             linked_assets = set((await session.exec(select(WorkProjectFindingAsset.asset_id).where(
                 WorkProjectFindingAsset.finding_id == step.finding_id
             ))).all())
             if not ({finding.primary_asset_id, *linked_assets} & {step.source_asset_id, step.target_asset_id}):
-                return "Attack path step finding is not linked to either step endpoint"
+                raise ValidationError("Attack path step finding is not linked to either step endpoint")
             if finding.verification == WorkProjectFindingVerification.REFUTED and step.status != WorkProjectAttackStepStatus.REFUTED:
-                return "Non-refuted attack path step cannot reference a refuted finding"
+                raise ValidationError("Non-refuted attack path step cannot reference a refuted finding")
             if step.status == WorkProjectAttackStepStatus.VALIDATED and finding.verification != WorkProjectFindingVerification.VALIDATED:
-                return "Validated attack path step requires a validated linked finding"
-        _, error = await validate_active_evidence_ids(session, project_id, step.evidence_ids)
-        if error:
-            return error
-    return ""
+                raise ValidationError("Validated attack path step requires a validated linked finding")
+        await validate_active_evidence_ids(session, project_id, step.evidence_ids)
 
 
-async def _validate_assets(session, project_id: int, asset_ids: list[int]) -> str:
+async def _validate_assets(session, project_id: int, asset_ids: list[int]) -> None:
     assets = list((await session.exec(select(WorkProjectAsset).where(WorkProjectAsset.id.in_(set(asset_ids))))).all())
     if len(assets) != len(set(asset_ids)) or any(asset.project_id != project_id for asset in assets):
-        return "Asset not found"
-    return ""
+        raise NotFoundError("Asset not found")

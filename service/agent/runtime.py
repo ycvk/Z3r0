@@ -1,6 +1,7 @@
 import asyncio
 import shlex
 
+from core.errors import ConflictError, NotFoundError, ValidationError
 from core.runtime import notifications as agent_notifications
 from core.runtime.context import AgentRuntimeContext, AgentUserContext, main_agent_instance_id
 from core.runtime.input_items import display_text_from_content
@@ -41,22 +42,6 @@ logger = get_logger(__name__)
 _MAX_SANDBOX_SKILLS = 32
 
 
-class SessionNotRunnableError(PermissionError):
-    pass
-
-
-class SessionBusyError(RuntimeError):
-    pass
-
-
-class SandboxContainerUnavailableError(ValueError):
-    pass
-
-
-class AgentUnavailableError(ValueError):
-    pass
-
-
 async def submit_user_turn(
     *,
     session_id: str,
@@ -87,11 +72,11 @@ async def submit_turn(
 ) -> list[AgentEventSchema]:
     meta = await agent_sessions.get_accessible_session_meta(session_id, user.id, user.role)
     if meta is None:
-        raise PermissionError("Agent session not found")
+        raise NotFoundError("Agent session not found")
     if not await can_run_work_project_session(session_id, user.id, user.role):
-        raise SessionNotRunnableError("Work project is canceled")
+        raise ValidationError("Work project is canceled")
     if requested_agent_code is not None and not get_agent_pool().registry.has(requested_agent_code):
-        raise AgentUnavailableError("Agent is not available")
+        raise ValidationError("Agent is not available")
     current_agent_code = meta.runtime_agent_code if meta.is_running else meta.agent_code
     if (
         requested_agent_code is not None
@@ -99,7 +84,7 @@ async def submit_turn(
         and requested_agent_code != current_agent_code
         and (meta.is_running or await has_outstanding_session_work(session_id))
     ):
-        raise SessionBusyError("Stop running tasks before switching agent")
+        raise ConflictError("Stop running tasks before switching agent")
     display_text = display_text_from_content(content)
     if has_pending_command(session_id):
         if is_guard_approval_reply(display_text):
@@ -118,7 +103,7 @@ async def submit_turn(
     try:
         return await runtime.start_turn(content, agent_code, context)
     except AgentSessionAgentSwitchError as exc:
-        raise SessionBusyError(str(exc)) from exc
+        raise ConflictError(str(exc)) from exc
 
 
 async def submit_new_chat_turn(
@@ -155,11 +140,11 @@ async def apply_turn_sandbox_selection(
 ) -> None:
     meta = await agent_sessions.get_accessible_session_meta(session_id, user.id, user.role)
     if meta is None:
-        raise PermissionError("Agent session not found")
+        raise NotFoundError("Agent session not found")
     if meta.project_id is not None:
         project_container_id = await sandbox_container_id_for_work_project(meta.project_id)
         if sandbox_container_id is not None and sandbox_container_id != project_container_id:
-            raise SandboxContainerUnavailableError("Work project sessions use the project's bound sandbox container")
+            raise ValidationError("Work project sessions use the project's bound sandbox container")
         selection_id, selection_generation = await _resolve_project_sandbox_selection_state(project_container_id)
         if (
             meta.selected_sandbox_container_id != selection_id
@@ -193,11 +178,11 @@ async def update_selected_sandbox_container(
 ) -> AgentSessionSummarySchema:
     meta = await agent_sessions.get_accessible_session_meta(session_id, user.id, user.role)
     if meta is None:
-        raise PermissionError("Agent session not found")
+        raise NotFoundError("Agent session not found")
     if meta.project_id is not None:
-        raise SandboxContainerUnavailableError("Work project sessions use the project's bound sandbox container")
+        raise ValidationError("Work project sessions use the project's bound sandbox container")
     if require_idle and (meta.is_running or await has_outstanding_session_work(session_id)):
-        raise SessionBusyError("Stop running tasks before switching sandbox container")
+        raise ConflictError("Stop running tasks before switching sandbox container")
     generation = 0
     if sandbox_container_id is not None:
         selection = await resolve_sandbox_container_selection(
@@ -206,7 +191,7 @@ async def update_selected_sandbox_container(
             user_role=user.role,
         )
         if selection is None:
-            raise SandboxContainerUnavailableError("Sandbox container is not available")
+            raise ValidationError("Sandbox container is not available")
         generation = selection.generation
 
     session = await agent_sessions.update_session_sandbox_container(
@@ -216,8 +201,6 @@ async def update_selected_sandbox_container(
         user_id=user.id,
         user_role=user.role,
     )
-    if session is None:
-        raise PermissionError("Agent session not found")
     await get_agent_pool().invalidate_session_tool_binding(session_id)
     return session
 
@@ -234,7 +217,7 @@ async def cancel_all_tasks(*, session_id: str, user: AuthUser) -> list[AgentEven
 
 async def _raise_unless_can_access(session_id: str, user: AuthUser) -> None:
     if not await can_access_agent_session(session_id, user.id, user.role):
-        raise PermissionError("Agent session not found")
+        raise NotFoundError("Agent session not found")
 
 
 async def resume_main_agent_session(session_id: str) -> None:

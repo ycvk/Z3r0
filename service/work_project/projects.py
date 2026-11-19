@@ -5,6 +5,7 @@ from sqlalchemy import Integer, String, cast, delete, func, or_, tuple_, update
 from sqlmodel import col, select
 
 from core.agent.constants import DEFAULT_AGENT_CODE
+from core.errors import NotFoundError, ValidationError
 from database import get_async_session
 from logger import get_logger
 from model.agent.sessions import AgentSessionMeta
@@ -53,17 +54,6 @@ logger = get_logger(__name__)
 _PROJECT_SESSION_TITLE_REGEX = r"^session ([0-9]+)$"
 
 
-class WorkProjectSessionCreateResult:
-    def __init__(self, session_id: str = "", not_found: bool = False, inactive: bool = False) -> None:
-        self.session_id = session_id
-        self.not_found = not_found
-        self.inactive = inactive
-
-
-class WorkProjectMetadataValidationError(ValueError):
-    pass
-
-
 def can_create_work_project_session(status: WorkProjectStatus) -> bool:
     return status == WorkProjectStatus.ACTIVE
 
@@ -94,15 +84,13 @@ async def create_work_project(
     )
 
     async with get_async_session() as session:
-        validation_error = await _validate_work_project_metadata_for_write(
+        await _validate_work_project_metadata_for_write(
             session,
             request,
             user_id=user_id,
             user_role=user_role,
             project_id=None,
         )
-        if validation_error:
-            raise WorkProjectMetadataValidationError(validation_error)
         session.add(project)
         await session.flush()
         project_id = project.id or 0
@@ -120,13 +108,13 @@ async def get_work_project_for_user(
     id: int,
     user_id: int,
     user_role: SystemUserRole,
-) -> WorkProjectSchema | None:
+) -> WorkProjectSchema:
     async with get_async_session() as session:
         if not await can_access_work_project_in_tx(session, id, user_id, user_role):
-            return None
+            raise NotFoundError("Work project not found")
         project = await session.get(WorkProject, id)
         if project is None:
-            return None
+            raise NotFoundError("Work project not found")
         return await _project_schema(session, project, user_id=user_id, user_role=user_role)
 
 
@@ -136,22 +124,20 @@ async def update_work_project_metadata(
     *,
     user_id: int,
     user_role: SystemUserRole,
-) -> WorkProjectSchema | None:
+) -> WorkProjectSchema:
     async with get_async_session() as session:
-        validation_error = await _validate_work_project_metadata_for_write(
+        await _validate_work_project_metadata_for_write(
             session,
             request,
             user_id=user_id,
             user_role=user_role,
             project_id=id,
         )
-        if validation_error:
-            raise WorkProjectMetadataValidationError(validation_error)
         project = (await session.exec(
             select(WorkProject).where(WorkProject.id == id).with_for_update()
         )).first()
         if project is None:
-            return None
+            raise NotFoundError("Work project not found")
         project.name = request.name
         project.description = request.description
         project.sandbox_container_id = request.sandbox_container_id
@@ -174,15 +160,15 @@ async def cancel_work_project(
     *,
     user_id: int,
     user_role: SystemUserRole,
-) -> tuple[WorkProjectSchema | None, bool]:
+) -> WorkProjectSchema:
     async with get_async_session() as session:
         project = (await session.exec(
             select(WorkProject).where(WorkProject.id == id).with_for_update()
         )).first()
         if project is None:
-            return None, False
+            raise NotFoundError("Work project not found")
         if not can_cancel_work_project(project.status):
-            return await _project_schema(session, project, user_id=user_id, user_role=user_role), False
+            raise ValidationError("Canceled projects cannot be canceled again")
 
         project.status = WorkProjectStatus.CANCELED
         project.updated_at = datetime.now()
@@ -196,16 +182,16 @@ async def cancel_work_project(
 
     await cancel_sessions(session_ids, "Work project canceled.")
     logger.info("Work project canceled: %s", id)
-    return schema, True
+    return schema
 
 
-async def delete_work_project(id: int) -> bool:
+async def delete_work_project(id: int) -> None:
     async with get_async_session() as session:
         project = (await session.exec(
             select(WorkProject).where(WorkProject.id == id).with_for_update()
         )).first()
         if project is None:
-            return False
+            raise NotFoundError("Work project not found")
         project.status = WorkProjectStatus.CANCELED
         project.updated_at = datetime.now()
         session.add(project)
@@ -226,12 +212,11 @@ async def delete_work_project(id: int) -> bool:
             select(WorkProject).where(WorkProject.id == id).with_for_update()
         )).first()
         if project is None:
-            return True
+            return
         await session.delete(project)
         await session.commit()
 
     logger.info("Work project deleted: %s", id)
-    return True
 
 
 async def retry_work_project(
@@ -239,15 +224,15 @@ async def retry_work_project(
     *,
     user_id: int,
     user_role: SystemUserRole,
-) -> tuple[WorkProjectSchema | None, bool]:
+) -> WorkProjectSchema:
     async with get_async_session() as session:
         project = (await session.exec(
             select(WorkProject).where(WorkProject.id == id).with_for_update()
         )).first()
         if project is None:
-            return None, False
+            raise NotFoundError("Work project not found")
         if not can_retry_work_project(project.status):
-            return await _project_schema(session, project, user_id=user_id, user_role=user_role), False
+            raise ValidationError("Only canceled projects can be retried")
 
         project.status = WorkProjectStatus.ACTIVE
         project.updated_at = datetime.now()
@@ -257,30 +242,30 @@ async def retry_work_project(
         schema = await _project_schema(session, project, user_id=user_id, user_role=user_role)
 
     logger.debug("Work project retried: %s", project.id)
-    return schema, True
+    return schema
 
 
-async def complete_work_project(project_id: int) -> str:
+async def complete_work_project(project_id: int) -> None:
     async with get_async_session() as session:
         project = (await session.exec(
             select(WorkProject).where(WorkProject.id == project_id).with_for_update()
         )).one_or_none()
         if project is None:
-            return "Work project not found"
+            raise NotFoundError("Work project not found")
         if project.status != WorkProjectStatus.ACTIVE:
-            return f"Work project is {project.status}"
+            raise ValidationError(f"Work project is {project.status}")
         open_work = (await session.exec(select(WorkProjectWorkItem.id).where(
             WorkProjectWorkItem.project_id == project_id,
             WorkProjectWorkItem.status.not_in({WorkProjectWorkItemStatus.COMPLETED, WorkProjectWorkItemStatus.CANCELED}),
         ).limit(1))).first()
         if open_work is not None:
-            return "Work project has non-terminal work items"
+            raise ValidationError("Work project has non-terminal work items")
         suspected = (await session.exec(select(WorkProjectFinding.id).where(
             WorkProjectFinding.project_id == project_id,
             WorkProjectFinding.verification == WorkProjectFindingVerification.SUSPECTED,
         ).limit(1))).first()
         if suspected is not None:
-            return "Work project has suspected findings that require validation, refutation, or deferral"
+            raise ValidationError("Work project has suspected findings that require validation, refutation, or deferral")
         in_scope_assets = set((await session.exec(select(WorkProjectAsset.id).where(
             WorkProjectAsset.project_id == project_id,
             WorkProjectAsset.scope == WorkProjectAssetScope.IN_SCOPE,
@@ -295,7 +280,7 @@ async def complete_work_project(project_id: int) -> str:
             )
         )).all())
         if not in_scope_assets.issubset(covered_assets):
-            return "Work project has in-scope assets without a covered or deferred target conclusion"
+            raise ValidationError("Work project has in-scope assets without a covered or deferred target conclusion")
         paths = list((await session.exec(select(WorkProjectAttackPath).where(WorkProjectAttackPath.project_id == project_id))).all())
         steps = list((await session.exec(select(WorkProjectAttackPathStep).where(WorkProjectAttackPathStep.project_id == project_id))).all())
         steps_by_path: dict[int, list[WorkProjectAttackPathStepSchema]] = {}
@@ -308,12 +293,11 @@ async def complete_work_project(project_id: int) -> str:
                 WorkProjectAttackPathStatus.REFUTED,
                 WorkProjectAttackPathStatus.ARCHIVED,
             }:
-                return "Work project has unresolved attack paths"
+                raise ValidationError("Work project has unresolved attack paths")
         project.status = WorkProjectStatus.COMPLETED
         project.updated_at = datetime.now()
         session.add(project)
         await session.commit()
-    return ""
 
 
 async def query_work_projects_for_user(
@@ -336,23 +320,23 @@ async def create_work_project_session(
     project_id: int,
     owner_id: int,
     user_role: SystemUserRole,
-) -> WorkProjectSessionCreateResult:
+) -> str:
     session_id = str(uuid4())
     async with get_async_session() as session:
         await lock_system_user_lifecycle(session, owner_id)
         if await session.get(SystemUser, owner_id) is None:
-            return WorkProjectSessionCreateResult(not_found=True)
+            raise NotFoundError("Work project not found")
         project = (await session.exec(
             select(WorkProject)
             .where(WorkProject.id == project_id)
             .with_for_update()
         )).first()
         if project is None:
-            return WorkProjectSessionCreateResult(not_found=True)
+            raise NotFoundError("Work project not found")
         if not await can_access_work_project_in_tx(session, project_id, owner_id, user_role):
-            return WorkProjectSessionCreateResult(not_found=True)
+            raise NotFoundError("Work project not found")
         if not can_create_work_project_session(project.status):
-            return WorkProjectSessionCreateResult(inactive=True)
+            raise ValidationError("Only active projects can create sessions")
         title = await _next_project_session_title(session, project_id)
         sandbox_container_id, sandbox_generation = await _project_sandbox_selection_in_tx(session, project_id)
 
@@ -370,7 +354,7 @@ async def create_work_project_session(
         await session.commit()
 
     logger.info("Work project session created: project=%s session=%s", project_id, session_id)
-    return WorkProjectSessionCreateResult(session_id=session_id)
+    return session_id
 
 
 async def list_work_project_sessions(
@@ -379,9 +363,9 @@ async def list_work_project_sessions(
     user_role: SystemUserRole,
     page: int,
     size: int,
-) -> Page[AgentSessionSummarySchema] | None:
+) -> Page[AgentSessionSummarySchema]:
     if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+        raise NotFoundError("Work project not found")
     return await list_sessions(
         page=page,
         size=size,
@@ -413,19 +397,23 @@ async def delete_work_project_session(
     session_id: str,
     user_id: int,
     user_role: SystemUserRole,
-) -> bool | None:
+) -> None:
     if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+        raise NotFoundError("Work project not found")
     async with get_async_session() as session:
         meta = await session.get(AgentSessionMeta, session_id)
         if meta is None or meta.project_id != project_id:
-            return None if await session.get(WorkProject, project_id) is None else False
-    return await delete_session(
+            if await session.get(WorkProject, project_id) is None:
+                raise NotFoundError("Work project not found")
+            raise NotFoundError("Work project session not found")
+    deleted = await delete_session(
         session_id,
         user_id=user_id,
         user_role=user_role,
         allow_project_session=True,
     )
+    if not deleted:
+        raise NotFoundError("Work project session not found")
 
 
 async def work_project_allows_sandbox_container(
@@ -799,13 +787,12 @@ async def _replace_project_owners(session, project_id: int, owner_user_ids: list
 
 def _validate_work_project_metadata_static(
     request: CreateWorkProjectRequest | UpdateWorkProjectMetadataRequest,
-) -> str:
+) -> None:
     if not request.assets:
-        return "At least one asset is required"
+        raise ValidationError("At least one asset is required")
     duplicate_asset = _duplicate_asset_identity(request.assets)
     if duplicate_asset:
-        return f"Duplicate asset: {duplicate_asset}"
-    return ""
+        raise ValidationError(f"Duplicate asset: {duplicate_asset}")
 
 
 async def _validate_work_project_metadata_for_write(
@@ -815,10 +802,8 @@ async def _validate_work_project_metadata_for_write(
     user_id: int,
     user_role: SystemUserRole,
     project_id: int | None,
-) -> str:
-    static_error = _validate_work_project_metadata_static(request)
-    if static_error:
-        return static_error
+) -> None:
+    _validate_work_project_metadata_static(request)
     if request.owner_user_ids:
         for owner_id in sorted(set(request.owner_user_ids)):
             await lock_system_user_lifecycle(session, owner_id)
@@ -827,11 +812,13 @@ async def _validate_work_project_metadata_for_write(
         )).all()
         missing_owner_ids = sorted(set(request.owner_user_ids) - set(users))
         if missing_owner_ids:
-            return f"Selected owners not found: {', '.join(str(id) for id in missing_owner_ids)}"
+            raise ValidationError(
+                f"Selected owners not found: {', '.join(str(id) for id in missing_owner_ids)}"
+            )
 
     if request.sandbox_container_id is None:
-        return ""
-    return await _validate_project_sandbox_container(
+        return
+    await _validate_project_sandbox_container(
         session,
         request.sandbox_container_id,
         user_id=user_id,
@@ -847,7 +834,7 @@ async def _validate_project_sandbox_container(
     user_id: int,
     user_role: SystemUserRole,
     project_id: int | None,
-) -> str:
+) -> None:
     statement = (
         select(SandboxContainer)
         .where(SandboxContainer.id == sandbox_container_id)
@@ -855,9 +842,9 @@ async def _validate_project_sandbox_container(
     )
     container = (await session.exec(statement)).first()
     if container is None:
-        return "Selected sandbox container not found"
+        raise ValidationError("Selected sandbox container not found")
     if not can_manage_sandbox_container(container, user_id, user_role):
-        return "Selected sandbox container is not available to the current user"
+        raise ValidationError("Selected sandbox container is not available to the current user")
 
     bound_to_current_project = project_id is not None and (await session.exec(
         select(WorkProject.id).where(
@@ -875,10 +862,9 @@ async def _validate_project_sandbox_container(
         binding_statement = binding_statement.where(WorkProject.id != project_id)
     bound_project_id = (await session.exec(binding_statement)).first()
     if bound_project_id is not None and bound_project_id != project_id:
-        return "Selected sandbox container is already bound to another work project"
+        raise ValidationError("Selected sandbox container is already bound to another work project")
     if container.status != SandboxContainerStatus.RUNNING and not bound_to_current_project:
-        return "Selected sandbox container is not running"
-    return ""
+        raise ValidationError("Selected sandbox container is not running")
 
 
 async def _sandbox_container_id_for_project_in_tx(session, project_id: int) -> int | None:

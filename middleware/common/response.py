@@ -5,11 +5,50 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from core.errors import (
+    AuthenticationError,
+    ConflictError,
+    DomainError,
+    ForbiddenError,
+    NotFoundError,
+    UpstreamError,
+    ValidationError,
+)
 from logger import get_logger
 from schema.common.responses import CommonResponse
 
 
 logger = get_logger(__name__)
+
+_DOMAIN_ERROR_STATUS: tuple[tuple[type[DomainError], HTTPStatus], ...] = (
+    (ValidationError, HTTPStatus.BAD_REQUEST),
+    (AuthenticationError, HTTPStatus.UNAUTHORIZED),
+    (ForbiddenError, HTTPStatus.FORBIDDEN),
+    (NotFoundError, HTTPStatus.NOT_FOUND),
+    (ConflictError, HTTPStatus.CONFLICT),
+    (UpstreamError, HTTPStatus.BAD_GATEWAY),
+)
+
+
+def status_for_domain_error(exc: DomainError) -> HTTPStatus:
+    for error_type, status in _DOMAIN_ERROR_STATUS:
+        if isinstance(exc, error_type):
+            return status
+    raise TypeError(f"Unmapped domain error type: {type(exc).__name__}")
+
+
+async def domain_exception_handler(_: Request, exc: Exception) -> JSONResponse:
+    """Render domain errors in the public CommonResponse shape."""
+    if not isinstance(exc, DomainError):
+        raise TypeError(f"Expected DomainError, got {type(exc).__name__}")
+    status = status_for_domain_error(exc)
+    return JSONResponse(
+        status_code=status.value,
+        content=CommonResponse(
+            code=status.value,
+            message=str(exc) or status.phrase,
+        ).model_dump(),
+    )
 
 
 def _serialize_validation_errors(errors: list[dict]) -> list[dict]:

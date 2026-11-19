@@ -9,12 +9,13 @@ from unicodedata import category
 
 from fastapi import UploadFile
 from lightrag import QueryParam
-from lightrag.base import DeletionResult, DocStatus
+from lightrag.base import DocStatus
 from lightrag.constants import FULL_DOCS_FORMAT_PENDING_PARSE, PARSED_DIR_NAME
 from lightrag.types import KnowledgeGraph
 from lightrag.utils import sanitize_and_normalize_extracted_text
 
 from config import get_config
+from core.errors import ConflictError, NotFoundError, UpstreamError, ValidationError
 from core.lightrag.runtime import LIGHTRAG_INPUT_DIR, LIGHTRAG_WORKSPACE, lightrag_client
 from logger import get_logger
 from schema.knowledge.resources import (
@@ -49,10 +50,6 @@ _GRAPH_DIRECT_MATCH_DEPTH = 1
 logger = get_logger(__name__)
 
 
-class KnowledgeDocumentError(ValueError):
-    pass
-
-
 async def query_knowledge_documents(
     *,
     page: int,
@@ -77,14 +74,14 @@ async def query_knowledge_documents(
     )
 
 
-async def get_knowledge_document(document_id: str) -> KnowledgeDocumentDetailSchema | None:
+async def get_knowledge_document(document_id: str) -> KnowledgeDocumentDetailSchema:
     async with lightrag_client() as rag:
         status_row, full_document = await asyncio.gather(
             rag.doc_status.get_by_id(document_id),
             rag.full_docs.get_by_id(document_id),
         )
     if status_row is None:
-        return None
+        raise NotFoundError("Knowledge document not found")
 
     document = _knowledge_document_schema(document_id, status_row)
     full_document = full_document or {}
@@ -113,7 +110,7 @@ async def upload_knowledge_documents(
     uploads: list[UploadFile],
 ) -> UploadKnowledgeDocumentsResponse:
     if not uploads:
-        raise KnowledgeDocumentError("At least one document is required")
+        raise ValidationError("At least one document is required")
 
     workspace_dir = LIGHTRAG_INPUT_DIR / LIGHTRAG_WORKSPACE
     workspace_dir.mkdir(parents=True, exist_ok=True)
@@ -130,15 +127,15 @@ async def upload_knowledge_documents(
                 try:
                     file_name = _validate_upload_file_name(upload)
                     if await rag.doc_status.get_doc_by_file_basename(file_name) is not None:
-                        raise KnowledgeDocumentError("A document with this file name already exists")
+                        raise ValidationError("A document with this file name already exists")
 
                     content = await _read_upload_content(upload)
                     source_path = workspace_dir / file_name
                     try:
                         await asyncio.to_thread(_write_new_document, source_path, content)
                     except FileExistsError:
-                        raise KnowledgeDocumentError("A document with this file name already exists") from None
-                except KnowledgeDocumentError as exc:
+                        raise ValidationError("A document with this file name already exists") from None
+                except ValidationError as exc:
                     rejected_files.append(
                         RejectedKnowledgeDocumentUpload(
                             file_name=display_name,
@@ -242,34 +239,39 @@ def _validate_upload_file_name(upload: UploadFile) -> str:
         or any(category(character) in {"Cc", "Cf", "Cs"} for character in file_name)
         or len(file_name.encode("utf-8")) > MAX_KNOWLEDGE_FILENAME_BYTES
     ):
-        raise KnowledgeDocumentError("Document file name is invalid")
+        raise ValidationError("Document file name is invalid")
     if suffix not in SUPPORTED_KNOWLEDGE_DOCUMENT_SUFFIXES:
-        raise KnowledgeDocumentError("Only Markdown and PDF documents are supported")
+        raise ValidationError("Only Markdown and PDF documents are supported")
     return file_name
 
 
 async def _read_upload_content(upload: UploadFile) -> bytes:
     content = await upload.read(MAX_KNOWLEDGE_DOCUMENT_BYTES + 1)
     if not content:
-        raise KnowledgeDocumentError("Document is empty")
+        raise ValidationError("Document is empty")
     if len(content) > MAX_KNOWLEDGE_DOCUMENT_BYTES:
-        raise KnowledgeDocumentError("Document exceeds the 25 MB size limit")
+        raise ValidationError("Document exceeds the 25 MB size limit")
     return content
 
 
-async def delete_knowledge_document(document_id: str) -> DeletionResult:
+async def delete_knowledge_document(document_id: str) -> None:
     async with lightrag_client() as rag:
         result = await rag.adelete_by_doc_id(document_id, delete_llm_cache=True)
-    if result.status == "fail":
-        logger.error(
-            "LightRAG document deletion failed: document_id=%s, status_code=%s, message=%s",
-            document_id,
-            result.status_code,
-            result.message,
-        )
-    if result.status == "success" and result.file_path:
-        await remove_knowledge_source_documents((result.file_path,))
-    return result
+    if result.status == "success":
+        if result.file_path:
+            await remove_knowledge_source_documents((result.file_path,))
+        return
+    if result.status == "not_found":
+        raise NotFoundError(result.message or "Knowledge document not found")
+    if result.status == "not_allowed":
+        raise ConflictError(result.message or "Knowledge document cannot be deleted right now")
+    logger.error(
+        "LightRAG document deletion failed: document_id=%s, status_code=%s, message=%s",
+        document_id,
+        result.status_code,
+        result.message,
+    )
+    raise UpstreamError(result.message or "Failed to delete knowledge document")
 
 
 async def query_knowledge_vectors(
@@ -342,11 +344,11 @@ async def _knowledge_vector_page_ids(rag, *, page: int, size: int) -> tuple[list
     return page_ids, scanned_chunks
 
 
-async def get_knowledge_vector(vector_id: str) -> KnowledgeVectorDetailSchema | None:
+async def get_knowledge_vector(vector_id: str) -> KnowledgeVectorDetailSchema:
     async with lightrag_client() as rag:
         row = await rag.text_chunks.get_by_id(vector_id)
     if row is None:
-        return None
+        raise NotFoundError("Knowledge vector not found")
 
     heading = row.get("heading")
     sidecar = row.get("sidecar")
@@ -538,7 +540,7 @@ async def get_knowledge_graph(
 async def search_knowledge_graph(*, query: str, max_nodes: int) -> KnowledgeGraphSchema:
     normalized_query = query.strip()
     if not normalized_query:
-        raise KnowledgeDocumentError("A graph search query is required")
+        raise ValidationError("A graph search query is required")
 
     try:
         async with lightrag_client() as rag:

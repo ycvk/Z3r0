@@ -7,6 +7,8 @@ import docker
 from sqlalchemy import or_, update
 from sqlmodel import select
 
+from core.errors import DomainError, ForbiddenError, NotFoundError, ValidationError
+from core.sandbox.command_jobs import cancel_sandbox_async_commands
 from database import get_async_session
 from logger import get_logger
 from model.agent.sessions import AgentSessionMeta
@@ -21,8 +23,9 @@ from schema.sandbox.containers import (
     SandboxContainerPortMapping,
     SandboxContainerStatus,
 )
+from schema.system_user.users import SystemUserRole
+from service.common.access import can_assign_sandbox_container_owner, can_manage_sandbox_container_by_id
 from service.host.docker import docker_client_for_host, inspect_image_on_host_sync
-from core.sandbox.command_jobs import cancel_sandbox_async_commands
 from service.sandbox.control_proxy import apply_container_egress
 from service.sandbox.docker_ops import (
     create_container_sync,
@@ -43,7 +46,7 @@ from service.sandbox.status import (
     save_sandbox_container_status,
     sync_container_status_unlocked,
 )
-from service.sandbox.types import SandboxContainerMutationResult
+from service.sandbox.types import SandboxContainerRecord
 from service.system_user.locking import system_user_lifecycle_lock
 
 
@@ -63,6 +66,15 @@ def _serialize_port_mappings(port_mappings: list[SandboxContainerPortMapping]) -
     return [mapping.model_dump() for mapping in port_mappings]
 
 
+async def require_manageable_sandbox_container(
+    container_id: int,
+    user_id: int,
+    user_role: SystemUserRole,
+) -> None:
+    if not await can_manage_sandbox_container_by_id(container_id, user_id, user_role):
+        raise NotFoundError("Sandbox container not found")
+
+
 async def create_sandbox_container(
     host_id: int,
     image_id: int,
@@ -70,7 +82,16 @@ async def create_sandbox_container(
     egress_proxy_id: int | None,
     owner_id: int,
     port_mappings: list[SandboxContainerPortMapping],
-) -> SandboxContainerMutationResult:
+    *,
+    actor_user_id: int | None = None,
+    actor_user_role: SystemUserRole | None = None,
+) -> SandboxContainerRecord:
+    if (
+        actor_user_id is not None
+        and actor_user_role is not None
+        and not can_assign_sandbox_container_owner(owner_id, actor_user_id, actor_user_role)
+    ):
+        raise ForbiddenError("No permission to assign the sandbox container owner")
     async with system_user_lifecycle_lock(owner_id):
         return await _create_sandbox_container(
             host_id=host_id,
@@ -89,7 +110,7 @@ async def _create_sandbox_container(
     egress_proxy_id: int | None,
     owner_id: int,
     port_mappings: list[SandboxContainerPortMapping],
-) -> SandboxContainerMutationResult:
+) -> SandboxContainerRecord:
     docker_host: ManagedHost | None = None
     container_hash = ""
     container_id: int | None = None
@@ -99,48 +120,27 @@ async def _create_sandbox_container(
                 select(ManagedHost).where(ManagedHost.id == host_id).with_for_update()
             )).one_or_none()
             if host is None:
-                return SandboxContainerMutationResult(
-                    record=None,
-                    succeeded=False,
-                    message="Managed host not found",
-                    not_found=True,
-                )
+                raise NotFoundError("Managed host not found")
             docker_host = host.model_copy(deep=True)
             sandbox_image = (await session.exec(
                 select(SandboxImage).where(SandboxImage.id == image_id).with_for_update()
             )).one_or_none()
             if sandbox_image is None:
-                return SandboxContainerMutationResult(
-                    record=None,
-                    succeeded=False,
-                    message="Sandbox image not found",
-                    not_found=True,
-                )
+                raise NotFoundError("Sandbox image not found")
             owner = await session.get(SystemUser, owner_id)
             if owner is None:
-                return SandboxContainerMutationResult(
-                    record=None,
-                    succeeded=False,
-                    message="System user not found",
-                    not_found=True,
-                )
-            egress_proxy, message = await _resolve_egress_selection(
+                raise NotFoundError("System user not found")
+            egress_proxy = await _resolve_egress_selection(
                 session,
                 sandbox_image,
                 egress_mode,
                 egress_proxy_id,
                 lock=True,
             )
-            if message:
-                return SandboxContainerMutationResult(record=None, succeeded=False, message=message)
 
             for mapping in port_mappings:
                 if mapping.container_port == sandbox_image.control_proxy_port and mapping.protocol == "tcp":
-                    return SandboxContainerMutationResult(
-                        record=None,
-                        succeeded=False,
-                        message="Control proxy port is reserved for the sandbox control proxy",
-                    )
+                    raise ValidationError("Control proxy port is reserved for the sandbox control proxy")
 
             await asyncio.to_thread(_assert_host_image_exists, docker_host, sandbox_image.image_name)
             reserved_tcp_host_ports = {mapping.host_port for mapping in port_mappings if mapping.protocol == "tcp"}
@@ -193,56 +193,38 @@ async def _create_sandbox_container(
             container_id = sandbox_container.id
             if container_id is None:
                 raise RuntimeError("Sandbox container ID was not generated")
-    except docker.errors.ImageNotFound:
-        return SandboxContainerMutationResult(
-            record=None,
-            succeeded=False,
-            message="Image does not exist on the selected host",
-        )
+    except (asyncio.CancelledError, DomainError):
+        raise
+    except docker.errors.ImageNotFound as exc:
+        raise ValidationError("Image does not exist on the selected host") from exc
     except BaseException as exc:
         if docker_host is not None and container_hash:
             await _rollback_created_container(docker_host, container_hash, exc)
-        if isinstance(exc, asyncio.CancelledError):
-            raise
         logger.exception("Sandbox container create failed for host=%s image=%s", host_id, image_id)
-        return SandboxContainerMutationResult(
-            record=None,
-            succeeded=False,
-            message="Failed to create sandbox container",
-        )
+        raise ValidationError("Failed to create sandbox container") from exc
 
     if container_id is None:
         raise RuntimeError("Sandbox container transaction completed without an ID")
 
     logger.info("Sandbox container created: %s", container_id)
-    return SandboxContainerMutationResult(
-        record=await load_sandbox_container_record(container_id),
-        succeeded=True,
-        message="Sandbox container created",
-    )
+    record = await load_sandbox_container_record(container_id)
+    if record is None:
+        raise NotFoundError("Sandbox container not found")
+    return record
 
 
 @serialized_sandbox_container_mutation
-async def start_sandbox_container(id: int) -> SandboxContainerMutationResult:
+async def start_sandbox_container(id: int) -> SandboxContainerRecord:
     record = await load_sandbox_container_record(id)
     if record is None:
-        return SandboxContainerMutationResult(
-            record=None,
-            succeeded=False,
-            message="Sandbox container not found",
-            not_found=True,
-        )
+        raise NotFoundError("Sandbox container not found")
     if record.container.status not in {SandboxContainerStatus.CREATED, SandboxContainerStatus.STOPPED}:
-        return SandboxContainerMutationResult(
-            record=record,
-            succeeded=False,
-            message="Only created or stopped sandbox containers can be started",
-        )
+        raise ValidationError("Only created or stopped sandbox containers can be started")
 
     try:
         host = await _load_container_host(record.container.host_id)
         if host is None:
-            return SandboxContainerMutationResult(record=record, succeeded=False, message="Managed host not found")
+            raise ValidationError("Managed host not found")
         await asyncio.to_thread(start_container_sync, host, record.container.container_hash)
         await asyncio.sleep(1)
         # The container is recorded as running only once its control proxy answers, so nothing
@@ -255,50 +237,37 @@ async def start_sandbox_container(id: int) -> SandboxContainerMutationResult:
         ):
             try:
                 await apply_container_egress(id, starting=True)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Sandbox container control proxy did not accept egress after start: %s", id)
                 await asyncio.to_thread(stop_container_sync, host, record.container.container_hash)
-                return SandboxContainerMutationResult(
-                    record=await save_sandbox_container_status(id, SandboxContainerStatus.STOPPED),
-                    succeeded=False,
-                    message="Sandbox container was stopped because its control proxy did not become ready",
-                )
+                await save_sandbox_container_status(id, SandboxContainerStatus.STOPPED)
+                raise ValidationError(
+                    "Sandbox container was stopped because its control proxy did not become ready"
+                ) from exc
         await sync_container_status_unlocked(ContainerStatusSnapshot(
             id=record.container.id or id,
             host_id=record.container.host_id,
             container_hash=record.container.container_hash,
             status=record.container.status,
         ))
-    except docker.errors.NotFound:
+    except (asyncio.CancelledError, DomainError):
+        raise
+    except docker.errors.NotFound as exc:
         logger.debug("Sandbox container instance not found while starting: %s", id)
-        return SandboxContainerMutationResult(
-            record=await save_sandbox_container_status(id, SandboxContainerStatus.ERROR),
-            succeeded=False,
-            message="Sandbox container instance not found",
-        )
-    except Exception:
+        await save_sandbox_container_status(id, SandboxContainerStatus.ERROR)
+        raise ValidationError("Sandbox container instance not found") from exc
+    except Exception as exc:
         logger.exception("Sandbox container start failed: %s", id)
-        return SandboxContainerMutationResult(
-            record=await save_sandbox_container_status(id, SandboxContainerStatus.ERROR),
-            succeeded=False,
-            message="Failed to start sandbox container",
-        )
+        await save_sandbox_container_status(id, SandboxContainerStatus.ERROR)
+        raise ValidationError("Failed to start sandbox container") from exc
 
     next_record = await load_sandbox_container_record(id)
     if next_record is not None and next_record.container.status == SandboxContainerStatus.RUNNING:
         logger.info("Sandbox container started: %s", id)
-        return SandboxContainerMutationResult(
-            record=next_record,
-            succeeded=True,
-            message="Sandbox container started",
-        )
+        return next_record
 
     logger.info("Sandbox container exited after start: %s", id)
-    return SandboxContainerMutationResult(
-        record=next_record,
-        succeeded=False,
-        message="Sandbox container is not running after start",
-    )
+    raise ValidationError("Sandbox container is not running after start")
 
 
 @serialized_sandbox_container_mutation
@@ -306,52 +275,32 @@ async def update_sandbox_container_egress(
     id: int,
     egress_mode: SandboxContainerEgressMode,
     egress_proxy_id: int | None,
-) -> SandboxContainerMutationResult:
+) -> tuple[SandboxContainerRecord, bool]:
     record = await load_sandbox_container_record(id)
     if record is None:
-        return SandboxContainerMutationResult(
-            record=None,
-            succeeded=False,
-            message="Sandbox container not found",
-            not_found=True,
-        )
+        raise NotFoundError("Sandbox container not found")
 
     async with get_async_session() as session:
         container = (await session.exec(
             select(SandboxContainer).where(SandboxContainer.id == id).with_for_update()
         )).one_or_none()
         if container is None:
-            return SandboxContainerMutationResult(
-                record=None,
-                succeeded=False,
-                message="Sandbox container not found",
-                not_found=True,
-            )
+            raise NotFoundError("Sandbox container not found")
         sandbox_image = await session.get(SandboxImage, container.image_id)
         if sandbox_image is None:
-            return SandboxContainerMutationResult(record=record, succeeded=False, message="Sandbox image not found")
-        egress_proxy, message = await _resolve_egress_selection(
+            raise ValidationError("Sandbox image not found")
+        egress_proxy = await _resolve_egress_selection(
             session,
             sandbox_image,
             egress_mode,
             egress_proxy_id,
             lock=True,
         )
-        if message:
-            return SandboxContainerMutationResult(record=record, succeeded=False, message=message)
         resolved_egress_proxy_id = egress_proxy.id if egress_proxy is not None else None
         if container.control_proxy_host_port <= 0:
-            return SandboxContainerMutationResult(
-                record=record,
-                succeeded=False,
-                message="Sandbox container has no control proxy port for egress updates",
-            )
+            raise ValidationError("Sandbox container has no control proxy port for egress updates")
         if container.egress_mode == egress_mode and container.egress_proxy_id == resolved_egress_proxy_id:
-            return SandboxContainerMutationResult(
-                record=record,
-                succeeded=True,
-                message="Sandbox container egress unchanged",
-            )
+            return record, False
         previous_egress_mode = container.egress_mode
         previous_egress_proxy_id = container.egress_proxy_id
         container.egress_mode = egress_mode
@@ -363,133 +312,91 @@ async def update_sandbox_container_egress(
     if record.container.status == SandboxContainerStatus.RUNNING:
         try:
             await apply_container_egress(id)
-        except Exception:
+        except Exception as exc:
             await _save_container_egress(id, previous_egress_mode, previous_egress_proxy_id)
             logger.exception("Sandbox container egress apply failed: %s", id)
-            return SandboxContainerMutationResult(
-                record=record,
-                succeeded=False,
-                message="Failed to apply egress to the running sandbox container",
-            )
+            raise ValidationError("Failed to apply egress to the running sandbox container") from exc
 
-    return SandboxContainerMutationResult(
-        record=await load_sandbox_container_record(id),
-        succeeded=True,
-        message="Sandbox container egress updated",
-    )
+    updated = await load_sandbox_container_record(id)
+    if updated is None:
+        raise NotFoundError("Sandbox container not found")
+    return updated, True
 
 
 @serialized_sandbox_container_mutation
-async def stop_sandbox_container(id: int) -> SandboxContainerMutationResult:
+async def stop_sandbox_container(id: int) -> SandboxContainerRecord:
     record = await load_sandbox_container_record(id)
     if record is None:
-        return SandboxContainerMutationResult(
-            record=None,
-            succeeded=False,
-            message="Sandbox container not found",
-            not_found=True,
-        )
+        raise NotFoundError("Sandbox container not found")
     if record.container.status != SandboxContainerStatus.RUNNING:
-        return SandboxContainerMutationResult(
-            record=record,
-            succeeded=False,
-            message="Only running sandbox containers can be stopped",
-        )
+        raise ValidationError("Only running sandbox containers can be stopped")
 
     try:
         host = await _load_container_host(record.container.host_id)
         if host is None:
-            return SandboxContainerMutationResult(record=record, succeeded=False, message="Managed host not found")
+            raise ValidationError("Managed host not found")
         await asyncio.to_thread(stop_container_sync, host, record.container.container_hash)
-    except docker.errors.NotFound:
+    except (asyncio.CancelledError, DomainError):
+        raise
+    except docker.errors.NotFound as exc:
         logger.debug("Sandbox container instance not found while stopping: %s", id)
-        return SandboxContainerMutationResult(
-            record=await save_sandbox_container_status(id, SandboxContainerStatus.ERROR),
-            succeeded=False,
-            message="Sandbox container instance not found",
-        )
-    except Exception:
+        await save_sandbox_container_status(id, SandboxContainerStatus.ERROR)
+        raise ValidationError("Sandbox container instance not found") from exc
+    except Exception as exc:
         logger.exception("Sandbox container stop failed: %s", id)
-        return SandboxContainerMutationResult(
-            record=await save_sandbox_container_status(id, SandboxContainerStatus.ERROR),
-            succeeded=False,
-            message="Failed to stop sandbox container",
-        )
+        await save_sandbox_container_status(id, SandboxContainerStatus.ERROR)
+        raise ValidationError("Failed to stop sandbox container") from exc
 
     logger.info("Sandbox container stopped: %s", id)
-    return SandboxContainerMutationResult(
-        record=await save_sandbox_container_status(id, SandboxContainerStatus.STOPPED),
-        succeeded=True,
-        message="Sandbox container stopped",
-    )
+    stopped = await save_sandbox_container_status(id, SandboxContainerStatus.STOPPED)
+    if stopped is None:
+        raise NotFoundError("Sandbox container not found")
+    return stopped
 
 
 @serialized_sandbox_container_mutation
-async def pause_sandbox_container(id: int) -> SandboxContainerMutationResult:
+async def pause_sandbox_container(id: int) -> SandboxContainerRecord:
     record = await load_sandbox_container_record(id)
     if record is None:
-        return SandboxContainerMutationResult(
-            record=None,
-            succeeded=False,
-            message="Sandbox container not found",
-            not_found=True,
-        )
+        raise NotFoundError("Sandbox container not found")
     if record.container.status != SandboxContainerStatus.RUNNING:
-        return SandboxContainerMutationResult(
-            record=record,
-            succeeded=False,
-            message="Only running sandbox containers can be paused",
-        )
+        raise ValidationError("Only running sandbox containers can be paused")
 
     try:
         host = await _load_container_host(record.container.host_id)
         if host is None:
-            return SandboxContainerMutationResult(record=record, succeeded=False, message="Managed host not found")
+            raise ValidationError("Managed host not found")
         await asyncio.to_thread(pause_container_sync, host, record.container.container_hash)
-    except docker.errors.NotFound:
+    except (asyncio.CancelledError, DomainError):
+        raise
+    except docker.errors.NotFound as exc:
         logger.debug("Sandbox container instance not found while pausing: %s", id)
-        return SandboxContainerMutationResult(
-            record=await save_sandbox_container_status(id, SandboxContainerStatus.ERROR),
-            succeeded=False,
-            message="Sandbox container instance not found",
-        )
-    except Exception:
+        await save_sandbox_container_status(id, SandboxContainerStatus.ERROR)
+        raise ValidationError("Sandbox container instance not found") from exc
+    except Exception as exc:
         logger.exception("Sandbox container pause failed: %s", id)
-        return SandboxContainerMutationResult(
-            record=await save_sandbox_container_status(id, SandboxContainerStatus.ERROR),
-            succeeded=False,
-            message="Failed to pause sandbox container",
-        )
+        await save_sandbox_container_status(id, SandboxContainerStatus.ERROR)
+        raise ValidationError("Failed to pause sandbox container") from exc
 
     logger.info("Sandbox container paused: %s", id)
-    return SandboxContainerMutationResult(
-        record=await save_sandbox_container_status(id, SandboxContainerStatus.PAUSED),
-        succeeded=True,
-        message="Sandbox container paused",
-    )
+    paused = await save_sandbox_container_status(id, SandboxContainerStatus.PAUSED)
+    if paused is None:
+        raise NotFoundError("Sandbox container not found")
+    return paused
 
 
 @serialized_sandbox_container_mutation
-async def resume_sandbox_container(id: int) -> SandboxContainerMutationResult:
+async def resume_sandbox_container(id: int) -> SandboxContainerRecord:
     record = await load_sandbox_container_record(id)
     if record is None:
-        return SandboxContainerMutationResult(
-            record=None,
-            succeeded=False,
-            message="Sandbox container not found",
-            not_found=True,
-        )
+        raise NotFoundError("Sandbox container not found")
     if record.container.status != SandboxContainerStatus.PAUSED:
-        return SandboxContainerMutationResult(
-            record=record,
-            succeeded=False,
-            message="Only paused sandbox containers can be resumed",
-        )
+        raise ValidationError("Only paused sandbox containers can be resumed")
 
     try:
         host = await _load_container_host(record.container.host_id)
         if host is None:
-            return SandboxContainerMutationResult(record=record, succeeded=False, message="Managed host not found")
+            raise ValidationError("Managed host not found")
         await asyncio.to_thread(resume_container_sync, host, record.container.container_hash)
         await sync_container_status_unlocked(ContainerStatusSnapshot(
             id=record.container.id or id,
@@ -507,42 +414,30 @@ async def resume_sandbox_container(id: int) -> SandboxContainerMutationResult:
                 await apply_container_egress(id)
             except Exception:
                 logger.warning("Sandbox container resumed, but egress refresh failed: %s", id, exc_info=True)
-    except docker.errors.NotFound:
+    except (asyncio.CancelledError, DomainError):
+        raise
+    except docker.errors.NotFound as exc:
         logger.debug("Sandbox container instance not found while resuming: %s", id)
-        return SandboxContainerMutationResult(
-            record=await save_sandbox_container_status(id, SandboxContainerStatus.ERROR),
-            succeeded=False,
-            message="Sandbox container instance not found",
-        )
-    except Exception:
+        await save_sandbox_container_status(id, SandboxContainerStatus.ERROR)
+        raise ValidationError("Sandbox container instance not found") from exc
+    except Exception as exc:
         logger.exception("Sandbox container resume failed: %s", id)
-        return SandboxContainerMutationResult(
-            record=await save_sandbox_container_status(id, SandboxContainerStatus.ERROR),
-            succeeded=False,
-            message="Failed to resume sandbox container",
-        )
+        await save_sandbox_container_status(id, SandboxContainerStatus.ERROR)
+        raise ValidationError("Failed to resume sandbox container") from exc
 
     next_record = await load_sandbox_container_record(id)
     if next_record is not None and next_record.container.status == SandboxContainerStatus.RUNNING:
         logger.info("Sandbox container resumed: %s", id)
-        return SandboxContainerMutationResult(
-            record=next_record,
-            succeeded=True,
-            message="Sandbox container resumed",
-        )
-    return SandboxContainerMutationResult(
-        record=next_record,
-        succeeded=False,
-        message="Sandbox container is not running after resume",
-    )
+        return next_record
+    raise ValidationError("Sandbox container is not running after resume")
 
 
 @serialized_sandbox_container_mutation
-async def delete_sandbox_container(id: int) -> bool:
+async def delete_sandbox_container(id: int) -> None:
     async with get_async_session() as session:
         sandbox_container = await session.get(SandboxContainer, id)
         if sandbox_container is None:
-            return False
+            raise NotFoundError("Sandbox container not found")
         host = await session.get(ManagedHost, sandbox_container.host_id)
         container_hash = sandbox_container.container_hash
 
@@ -554,13 +449,12 @@ async def delete_sandbox_container(id: int) -> bool:
     async with get_async_session() as session:
         sandbox_container = await session.get(SandboxContainer, id)
         if sandbox_container is None:
-            return True
+            return
         await _clear_sandbox_container_references(session, id)
         await session.delete(sandbox_container)
         await session.commit()
 
     logger.info("Sandbox container deleted: %s", id)
-    return True
 
 
 async def _rollback_created_container(
@@ -644,26 +538,26 @@ async def _resolve_egress_selection(
     egress_proxy_id: int | None,
     *,
     lock: bool = False,
-) -> tuple[EgressProxy | None, str]:
+) -> EgressProxy | None:
     if egress_mode == SandboxContainerEgressMode.DIRECT:
         if egress_proxy_id is not None:
-            return None, "An egress proxy is only valid for proxy egress mode"
-        return None, ""
+            raise ValidationError("An egress proxy is only valid for proxy egress mode")
+        return None
     if egress_mode == SandboxContainerEgressMode.TOR:
         if egress_proxy_id is not None:
-            return None, "An egress proxy is only valid for proxy egress mode"
+            raise ValidationError("An egress proxy is only valid for proxy egress mode")
         if not sandbox_image.supports_tor:
-            return None, "The sandbox image does not support Tor egress"
-        return None, ""
+            raise ValidationError("The sandbox image does not support Tor egress")
+        return None
     if egress_proxy_id is None:
-        return None, "An egress proxy is required for proxy egress mode"
+        raise ValidationError("An egress proxy is required for proxy egress mode")
     statement = select(EgressProxy).where(EgressProxy.id == egress_proxy_id)
     if lock:
         statement = statement.with_for_update()
     egress_proxy = (await session.exec(statement)).one_or_none()
     if egress_proxy is None:
-        return None, "Egress proxy not found"
-    return egress_proxy, ""
+        raise ValidationError("Egress proxy not found")
+    return egress_proxy
 
 
 async def _save_container_egress(

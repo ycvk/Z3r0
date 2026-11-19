@@ -1,7 +1,6 @@
 import asyncio
 import hmac
 import secrets
-from dataclasses import dataclass
 from hashlib import pbkdf2_hmac
 from datetime import datetime, timedelta
 
@@ -11,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
 from config import get_config
+from core.errors import AuthenticationError, ConflictError, NotFoundError, ValidationError
 from database import get_async_session
 from logger import get_logger
 from model.agent.sessions import AgentSessionMeta
@@ -29,24 +29,6 @@ logger = get_logger(__name__)
 _PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
 _PASSWORD_HASH_ITERATIONS = 390_000
 _PASSWORD_SALT_BYTES = 16
-
-
-@dataclass(frozen=True)
-class DeleteSystemUserResult:
-    deleted: bool
-    not_found: bool = False
-    message: str = ""
-
-
-@dataclass(frozen=True)
-class UpdateSystemUserResult:
-    user: SystemUser | None
-    not_found: bool = False
-    message: str = ""
-
-
-class SystemUserConflictError(ValueError):
-    pass
 
 
 def _hash_password(password: str) -> str:
@@ -102,14 +84,14 @@ async def create_system_user(
             await session.commit()
         except IntegrityError as exc:
             await session.rollback()
-            raise SystemUserConflictError("Username or email already exists") from exc
+            raise ConflictError("Username or email already exists") from exc
         await session.refresh(system_user)
 
     logger.info("System user created: %s", system_user.id)
     return system_user
 
 
-async def delete_system_user(id: int) -> DeleteSystemUserResult:
+async def delete_system_user(id: int) -> None:
     while True:
         async with get_async_session() as session:
             await _lock_admin_membership(session)
@@ -118,16 +100,13 @@ async def delete_system_user(id: int) -> DeleteSystemUserResult:
                 select(SystemUser).where(SystemUser.id == id).with_for_update()
             )).first()
             if system_user is None:
-                return DeleteSystemUserResult(deleted=False, not_found=True, message="System user not found")
+                raise NotFoundError("System user not found")
             message = await _user_deletion_blocker(session, system_user)
             if message:
-                return DeleteSystemUserResult(deleted=False, message=message)
+                raise ValidationError(message)
             reassignment = await _project_session_reassignment(session, id)
             if reassignment is None:
-                return DeleteSystemUserResult(
-                    deleted=False,
-                    message="Shared agent sessions require another project owner or administrator",
-                )
+                raise ValidationError("Shared agent sessions require another project owner or administrator")
 
         await cancel_sessions(
             list(reassignment),
@@ -142,10 +121,10 @@ async def delete_system_user(id: int) -> DeleteSystemUserResult:
                 select(SystemUser).where(SystemUser.id == id).with_for_update()
             )).first()
             if system_user is None:
-                return DeleteSystemUserResult(deleted=False, not_found=True, message="System user not found")
+                raise NotFoundError("System user not found")
             message = await _user_deletion_blocker(session, system_user)
             if message:
-                return DeleteSystemUserResult(deleted=False, message=message)
+                raise ValidationError(message)
 
             private_session_exists = (await session.exec(
                 select(AgentSessionMeta.session_id).where(
@@ -165,17 +144,13 @@ async def delete_system_user(id: int) -> DeleteSystemUserResult:
 
             reassignment = await _project_session_reassignment(session, id)
             if reassignment is None:
-                return DeleteSystemUserResult(
-                    deleted=False,
-                    message="Shared agent sessions require another project owner or administrator",
-                )
+                raise ValidationError("Shared agent sessions require another project owner or administrator")
             await _apply_project_session_reassignment(session, reassignment)
             await session.delete(system_user)
             await session.commit()
             break
 
     logger.info("System user deleted: %s", id)
-    return DeleteSystemUserResult(deleted=True)
 
 
 async def update_system_user(
@@ -184,7 +159,7 @@ async def update_system_user(
     password: str | None = None,
     email: str | None = None,
     role: SystemUserRole | None = None,
-) -> UpdateSystemUserResult:
+) -> SystemUser:
     password_hash = await asyncio.to_thread(_hash_password, password) if password is not None else None
     async with get_async_session() as session:
         await _lock_admin_membership(session)
@@ -192,17 +167,14 @@ async def update_system_user(
             select(SystemUser).where(SystemUser.id == id).with_for_update()
         )).first()
         if system_user is None:
-            return UpdateSystemUserResult(user=None, not_found=True)
+            raise NotFoundError("System user not found")
 
         if (
             role == SystemUserRole.USER
             and system_user.role == SystemUserRole.ADMIN
             and await _admin_count(session) <= 1
         ):
-            return UpdateSystemUserResult(
-                user=system_user,
-                message="The last administrator cannot be demoted",
-            )
+            raise ValidationError("The last administrator cannot be demoted")
 
         if role is not None:
             system_user.role = role
@@ -219,11 +191,11 @@ async def update_system_user(
             await session.commit()
         except IntegrityError as exc:
             await session.rollback()
-            raise SystemUserConflictError("Username or email already exists") from exc
+            raise ConflictError("Username or email already exists") from exc
         await session.refresh(system_user)
 
     logger.info("System user updated: %s", system_user.id)
-    return UpdateSystemUserResult(user=system_user)
+    return system_user
 
 
 async def query_system_user_by_username(username: str) -> SystemUser | None:
@@ -257,17 +229,14 @@ async def query_system_users(
     return await paginate_statement(statement, page=page, size=size)
 
 
-async def system_user_login(email: str, password: str) -> str | None:
+async def system_user_login(email: str, password: str) -> str:
     cfg = get_config()
 
     async with get_async_session() as session:
         result = await session.exec(select(SystemUser).where(SystemUser.email == email.strip().casefold()))
         system_user = result.first()
-    if system_user is None:
-        return None
-
-    if not await asyncio.to_thread(_verify_password, password, system_user.password):
-        return None
+    if system_user is None or not await asyncio.to_thread(_verify_password, password, system_user.password):
+        raise AuthenticationError("Invalid email or password")
 
     return jwt.encode(
         payload={

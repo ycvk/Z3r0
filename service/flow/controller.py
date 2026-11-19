@@ -106,11 +106,14 @@ async def _run_flow(public_id: str) -> None:
         if user is None:
             await flow_records.fail_flow_run(public_id, "Flow owner no longer exists.")
             return
-        if flow.status in {FlowStatus.QUEUED, FlowStatus.PLANNING} or not (await flow_records.get_flow(public_id, user)).subtasks:
+        initial_schema = await flow_records.load_flow_schema(public_id)
+        if initial_schema is None:
+            return
+        if flow.status in {FlowStatus.QUEUED, FlowStatus.PLANNING} or not initial_schema.subtasks:
             if not await _plan(public_id, user):
                 return
         while True:
-            flow_schema = await flow_records.get_flow(public_id, user)
+            flow_schema = await flow_records.load_flow_schema(public_id)
             if flow_schema is None or flow_schema.status in FLOW_TERMINAL_STATUSES:
                 return
             if flow_schema.status == FlowStatus.WAITING:
@@ -246,7 +249,7 @@ async def _report(public_id: str, user: AuthUser) -> None:
     if flow is None:
         return
     await flow_records.update_flow_status(public_id, FlowStatus.REPORTING)
-    schema = await flow_records.get_flow(public_id, user)
+    schema = await flow_records.load_flow_schema(public_id)
     await _run_turn(flow.session_id, user, REPORT_PROMPT)
     await _wait_idle(flow.session_id)
     report_id = latest_report_id_for_session(flow.session_id)

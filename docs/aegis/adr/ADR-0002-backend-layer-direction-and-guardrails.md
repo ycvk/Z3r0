@@ -21,7 +21,7 @@ migration tool, lock file, or CI, so structural changes could not be verified.
 Layers:
 
 - Backend packages import downward only, in this order: `router`, `handler`
-  and `tools`, `service`, `core`, `middleware`, `model`, `schema`, `utils`.
+  and `tools`, `service`, `middleware`, `core`, `model`, `schema`, `utils`.
   `lint-imports` enforces the order and has no exceptions.
 - `handler` is the entry for HTTP requests and `tools` is the entry for agent
   tool calls. They sit on the same layer and do not import each other.

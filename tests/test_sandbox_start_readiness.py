@@ -6,6 +6,7 @@ import socket
 import pytest
 from aiohttp import web
 
+from core.errors import ValidationError
 from database import get_async_session
 from model.host.hosts import ManagedHost
 from model.sandbox.containers import SandboxContainer
@@ -102,13 +103,12 @@ async def test_start_applies_egress_once_slow_control_proxy_is_ready(
 
     late = asyncio.create_task(listen_late())
     try:
-        result = await lifecycle.start_sandbox_container(container_id)
+        record = await lifecycle.start_sandbox_container(container_id)
     finally:
         await late
         await runner.cleanup()
 
-    assert result.succeeded, result.message
-    assert result.record is not None and result.record.container.status == SandboxContainerStatus.RUNNING
+    assert record.container.status == SandboxContainerStatus.RUNNING
     assert calls == ["start"]
     assert len(egress_payloads) == 1
     assert egress_payloads[0]["environment"]["HTTPS_PROXY"] == "http://127.0.0.1:8118"
@@ -125,9 +125,10 @@ async def test_start_fails_and_stops_container_when_control_proxy_never_listens(
     calls = _fake_docker(monkeypatch)
     monkeypatch.setattr(control_proxy, "_CONTROL_PROXY_READY_TIMEOUT_SECONDS", 1.0)
 
-    result = await lifecycle.start_sandbox_container(container_id)
+    with pytest.raises(ValidationError, match="control proxy"):
+        await lifecycle.start_sandbox_container(container_id)
 
-    assert not result.succeeded
-    assert "control proxy" in result.message
     assert calls == ["start", "stop"]
-    assert result.record is not None and result.record.container.status == SandboxContainerStatus.STOPPED
+    async with get_async_session() as session:
+        container = await session.get(SandboxContainer, container_id)
+        assert container is not None and container.status == SandboxContainerStatus.STOPPED

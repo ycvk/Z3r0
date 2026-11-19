@@ -206,7 +206,7 @@ cd web && npm run build && npm run build:landing
 docker exec postgres createdb -U root z3r0_test
 ```
 
-`lint-imports` enforces the backend layer order `router`, `handler` and `tools`, `service`, `core`, `middleware`, `model`, `schema`, `utils`: a package imports only from packages listed after it, and `handler` and `tools` do not import each other. It also keeps `router` and `handler` from importing `model`. `basedpyright` reports only errors that are absent from `.basedpyright/baseline.json`.
+`lint-imports` enforces the backend layer order `router`, `handler` and `tools`, `service`, `middleware`, `core`, `model`, `schema`, `utils`: a package imports only from packages listed after it, and `handler` and `tools` do not import each other. It also keeps `router` and `handler` from importing `model`. `basedpyright` reports only errors that are absent from `.basedpyright/baseline.json`.
 
 ### Change the database schema
 

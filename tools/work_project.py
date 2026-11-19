@@ -4,6 +4,7 @@ from agents import RunContextWrapper, function_tool
 from sqlmodel import select
 
 from core.agent.constants import DEFAULT_AGENT_CODE
+from core.errors import DomainError
 from core.runtime.context import AgentRuntimeContext
 from database import get_async_session
 from model.work_project.assets import WorkProjectAsset
@@ -245,15 +246,18 @@ async def save_work_project_asset(ctx: RunContextWrapper[AgentRuntimeContext], a
                     field_name: getattr(current_asset, field_name)
                     for field_name in governed_fields
                 })
-    if asset_id is None:
-        saved, error = await upsert_work_project_asset(
-            project_id, asset,
-            created_by_agent_code=ctx.context.agent_code,
-            created_from_session_id=ctx.context.session_id,
-        )
-    else:
-        saved, error = await update_work_project_asset(project_id, asset_id, asset)
-    return work_project_error(error) if error else work_project_success({"asset": _dump(saved)})
+    try:
+        if asset_id is None:
+            saved = await upsert_work_project_asset(
+                project_id, asset,
+                created_by_agent_code=ctx.context.agent_code,
+                created_from_session_id=ctx.context.session_id,
+            )
+        else:
+            saved = await update_work_project_asset(project_id, asset_id, asset)
+    except DomainError as exc:
+        return work_project_error(str(exc))
+    return work_project_success({"asset": _dump(saved)})
 
 
 @function_tool
@@ -280,8 +284,11 @@ async def merge_work_project_asset_records(
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    saved, error = await merge_work_project_assets(project_id, source_asset_id, target_asset_id)
-    return work_project_error(error) if error else work_project_success({"asset": _dump(saved), "merged_asset_id": source_asset_id})
+    try:
+        saved = await merge_work_project_assets(project_id, source_asset_id, target_asset_id)
+    except DomainError as exc:
+        return work_project_error(str(exc))
+    return work_project_success({"asset": _dump(saved), "merged_asset_id": source_asset_id})
 
 
 @function_tool
@@ -305,12 +312,15 @@ async def record_work_project_evidence(ctx: RunContextWrapper[AgentRuntimeContex
         return work_project_error("No work project is bound to this session.")
     if error := await _specialist_mutation_error(ctx, evidence.work_item_id):
         return work_project_error(error)
-    saved, error = await create_work_project_evidence(
-        project_id, evidence,
-        created_by_agent_code=ctx.context.agent_code,
-        created_from_session_id=ctx.context.session_id,
-    )
-    return work_project_error(error) if error else work_project_success({"evidence": _dump(saved)})
+    try:
+        saved = await create_work_project_evidence(
+            project_id, evidence,
+            created_by_agent_code=ctx.context.agent_code,
+            created_from_session_id=ctx.context.session_id,
+        )
+    except DomainError as exc:
+        return work_project_error(str(exc))
+    return work_project_success({"evidence": _dump(saved)})
 
 
 @function_tool
@@ -334,14 +344,17 @@ async def invalidate_work_project_evidence_record(ctx: RunContextWrapper[AgentRu
         return work_project_error("No work project is bound to this session.")
     if error := await _specialist_mutation_error(ctx):
         return work_project_error(error)
-    error = await invalidate_work_project_evidence(
-        project_id,
-        evidence_id,
-        reason,
-        actor_agent_code=ctx.context.agent_code,
-        actor_work_item_id=ctx.context.work_item_id,
-    )
-    return work_project_error(error) if error else work_project_success({"invalidated_evidence_id": evidence_id})
+    try:
+        await invalidate_work_project_evidence(
+            project_id,
+            evidence_id,
+            reason,
+            actor_agent_code=ctx.context.agent_code,
+            actor_work_item_id=ctx.context.work_item_id,
+        )
+    except DomainError as exc:
+        return work_project_error(str(exc))
+    return work_project_success({"invalidated_evidence_id": evidence_id})
 
 
 @function_tool
@@ -385,12 +398,15 @@ async def save_work_project_relation(ctx: RunContextWrapper[AgentRuntimeContext]
         return work_project_error("No work project is bound to this session.")
     if error := await _specialist_mutation_error(ctx):
         return work_project_error(error)
-    saved, error = await upsert_work_project_relation(
-        project_id, relation, relation_id=relation_id,
-        created_by_agent_code=ctx.context.agent_code,
-        created_from_session_id=ctx.context.session_id,
-    )
-    return work_project_error(error) if error else work_project_success({"relation": _dump(saved)})
+    try:
+        saved = await upsert_work_project_relation(
+            project_id, relation, relation_id=relation_id,
+            created_by_agent_code=ctx.context.agent_code,
+            created_from_session_id=ctx.context.session_id,
+        )
+    except DomainError as exc:
+        return work_project_error(str(exc))
+    return work_project_success({"relation": _dump(saved)})
 
 
 @function_tool
@@ -470,12 +486,15 @@ async def save_work_project_finding(ctx: RunContextWrapper[AgentRuntimeContext],
         return work_project_error("No work project is bound to this session.")
     if error := await _specialist_mutation_error(ctx):
         return work_project_error(error)
-    saved, error = await save_work_project_finding_service(
-        project_id, finding, finding_id=finding_id,
-        created_by_agent_code=ctx.context.agent_code,
-        created_from_session_id=ctx.context.session_id,
-    )
-    return work_project_error(error) if error else work_project_success({"finding": _dump(saved)})
+    try:
+        saved = await save_work_project_finding_service(
+            project_id, finding, finding_id=finding_id,
+            created_by_agent_code=ctx.context.agent_code,
+            created_from_session_id=ctx.context.session_id,
+        )
+    except DomainError as exc:
+        return work_project_error(str(exc))
+    return work_project_success({"finding": _dump(saved)})
 
 
 @function_tool
@@ -498,12 +517,15 @@ async def save_work_project_attack_path(ctx: RunContextWrapper[AgentRuntimeConte
         return work_project_error("No work project is bound to this session.")
     if error := await _specialist_mutation_error(ctx):
         return work_project_error(error)
-    saved, steps, error = await save_work_project_attack_path_service(
-        project_id, path, path_id=path_id,
-        created_by_agent_code=ctx.context.agent_code,
-        created_from_session_id=ctx.context.session_id,
-    )
-    return work_project_error(error) if error else work_project_success({"attack_path": _dump(saved), "steps": [_dump(item) for item in steps]})
+    try:
+        saved, steps = await save_work_project_attack_path_service(
+            project_id, path, path_id=path_id,
+            created_by_agent_code=ctx.context.agent_code,
+            created_from_session_id=ctx.context.session_id,
+        )
+    except DomainError as exc:
+        return work_project_error(str(exc))
+    return work_project_success({"attack_path": _dump(saved), "steps": [_dump(item) for item in steps]})
 
 
 @function_tool
@@ -574,13 +596,13 @@ async def create_work_project_work_item(
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    saved, error = await create_work_project_work_item_service(
+    return await _call_work_item_mutation(
+        create_work_project_work_item_service,
         project_id,
         plan,
         actor_agent_code=ctx.context.agent_code,
         actor_session_id=ctx.context.session_id,
     )
-    return _work_item_result(saved, error)
 
 
 @function_tool
@@ -603,14 +625,14 @@ async def update_work_project_work_item_plan(
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    saved, error = await update_work_project_work_item_plan_service(
+    return await _call_work_item_mutation(
+        update_work_project_work_item_plan_service,
         project_id,
         work_item_id,
         plan,
         actor_agent_code=ctx.context.agent_code,
         actor_session_id=ctx.context.session_id,
     )
-    return _work_item_result(saved, error)
 
 
 @function_tool
@@ -635,14 +657,14 @@ async def activate_work_project_work_item(
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    saved, error = await activate_work_project_work_item_service(
+    return await _call_work_item_mutation(
+        activate_work_project_work_item_service,
         project_id,
         work_item_id,
         reason,
         actor_agent_code=ctx.context.agent_code,
         actor_session_id=ctx.context.session_id,
     )
-    return _work_item_result(saved, error)
 
 
 @function_tool
@@ -668,13 +690,16 @@ async def update_work_project_work_item_target(
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    saved, error = await update_work_project_work_item_target_service(
-        project_id,
-        work_item_id,
-        target,
-        actor_agent_code=ctx.context.agent_code,
-    )
-    return work_project_error(error) if error else work_project_success({"target": _dump(saved)})
+    try:
+        saved = await update_work_project_work_item_target_service(
+            project_id,
+            work_item_id,
+            target,
+            actor_agent_code=ctx.context.agent_code,
+        )
+    except DomainError as exc:
+        return work_project_error(str(exc))
+    return work_project_success({"target": _dump(saved)})
 
 
 @function_tool
@@ -701,7 +726,8 @@ async def block_work_project_work_item(
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    saved, error = await block_work_project_work_item_service(
+    return await _call_work_item_mutation(
+        block_work_project_work_item_service,
         project_id,
         work_item_id,
         targets,
@@ -709,7 +735,6 @@ async def block_work_project_work_item(
         actor_agent_code=ctx.context.agent_code,
         actor_session_id=ctx.context.session_id,
     )
-    return _work_item_result(saved, error)
 
 
 @function_tool
@@ -735,14 +760,14 @@ async def submit_work_project_work_item_review(
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    saved, error = await submit_work_project_work_item_review_service(
+    return await _call_work_item_mutation(
+        submit_work_project_work_item_review_service,
         project_id,
         work_item_id,
         result_summary,
         actor_agent_code=ctx.context.agent_code,
         actor_session_id=ctx.context.session_id,
     )
-    return _work_item_result(saved, error)
 
 
 @function_tool
@@ -770,7 +795,8 @@ async def review_work_project_work_item(
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    saved, error = await review_work_project_work_item_service(
+    return await _call_work_item_mutation(
+        review_work_project_work_item_service,
         project_id,
         work_item_id,
         decision,
@@ -779,7 +805,6 @@ async def review_work_project_work_item(
         actor_agent_code=ctx.context.agent_code,
         actor_session_id=ctx.context.session_id,
     )
-    return _work_item_result(saved, error)
 
 
 @function_tool
@@ -802,14 +827,14 @@ async def cancel_work_project_work_item(
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    saved, error = await cancel_work_project_work_item_service(
+    return await _call_work_item_mutation(
+        cancel_work_project_work_item_service,
         project_id,
         work_item_id,
         reason,
         actor_agent_code=ctx.context.agent_code,
         actor_session_id=ctx.context.session_id,
     )
-    return _work_item_result(saved, error)
 
 
 @function_tool
@@ -832,14 +857,14 @@ async def reopen_work_project_work_item(
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    saved, error = await reopen_work_project_work_item_service(
+    return await _call_work_item_mutation(
+        reopen_work_project_work_item_service,
         project_id,
         work_item_id,
         reason,
         actor_agent_code=ctx.context.agent_code,
         actor_session_id=ctx.context.session_id,
     )
-    return _work_item_result(saved, error)
 
 
 @function_tool
@@ -860,12 +885,15 @@ async def record_work_project_work_log(ctx: RunContextWrapper[AgentRuntimeContex
         return work_project_error("No work project is bound to this session.")
     if error := _specialist_work_item_error(ctx, work_item_id):
         return work_project_error(error)
-    saved, error = await create_work_project_work_log(
-        project_id, work_item_id, entry,
-        actor_agent_code=ctx.context.agent_code,
-        actor_session_id=ctx.context.session_id,
-    )
-    return work_project_error(error) if error else work_project_success({"work_log": _dump(saved)})
+    try:
+        saved = await create_work_project_work_log(
+            project_id, work_item_id, entry,
+            actor_agent_code=ctx.context.agent_code,
+            actor_session_id=ctx.context.session_id,
+        )
+    except DomainError as exc:
+        return work_project_error(str(exc))
+    return work_project_success({"work_log": _dump(saved)})
 
 
 @function_tool
@@ -885,8 +913,11 @@ async def complete_current_work_project(ctx: RunContextWrapper[AgentRuntimeConte
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    error = await complete_work_project(project_id)
-    return work_project_error(error) if error else work_project_success({"project_id": project_id, "status": "completed"})
+    try:
+        await complete_work_project(project_id)
+    except DomainError as exc:
+        return work_project_error(str(exc))
+    return work_project_success({"project_id": project_id, "status": "completed"})
 
 
 def _project_id(ctx: RunContextWrapper[AgentRuntimeContext]) -> int | None:
@@ -932,8 +963,12 @@ async def _specialist_mutation_error(
     return ""
 
 
-def _work_item_result(saved, error: str) -> str:
-    return work_project_error(error) if error else work_project_success({"work_item": _dump(saved)})
+async def _call_work_item_mutation(fn, *args, **kwargs) -> str:
+    try:
+        saved = await fn(*args, **kwargs)
+    except DomainError as exc:
+        return work_project_error(str(exc))
+    return work_project_success({"work_item": _dump(saved)})
 
 
 def _dump(value) -> dict:

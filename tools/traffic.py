@@ -81,8 +81,6 @@ async def get_traffic_detail(
         )
     except Exception as exc:
         return _traffic_result(ToolResultStatusSchema.ERROR, str(exc) or "Failed to load traffic entry")
-    if detail is None:
-        return _traffic_result(ToolResultStatusSchema.ERROR, f"Traffic entry {traffic_id} not found")
     return _traffic_result(
         ToolResultStatusSchema.SUCCESS,
         json.dumps(detail.model_dump(mode="json"), ensure_ascii=False),

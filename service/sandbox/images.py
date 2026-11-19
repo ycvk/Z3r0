@@ -1,20 +1,13 @@
-from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import or_
 from sqlmodel import select
 
+from core.errors import NotFoundError, ValidationError
 from database import get_async_session
 from model.sandbox.containers import SandboxContainer
 from model.sandbox.images import SandboxImage
 from service.common.pagination import Page, RESOURCE_PAGE_SIZE, paginate_statement
-
-
-@dataclass(frozen=True)
-class DeleteSandboxImageResult:
-    deleted: bool
-    not_found: bool = False
-    message: str = ""
 
 
 async def create_sandbox_image(
@@ -37,25 +30,20 @@ async def create_sandbox_image(
     return sandbox_image
 
 
-async def delete_sandbox_image(id: int) -> DeleteSandboxImageResult:
+async def delete_sandbox_image(id: int) -> None:
     async with get_async_session() as session:
         sandbox_image = (await session.exec(
             select(SandboxImage).where(SandboxImage.id == id).with_for_update()
         )).one_or_none()
         if sandbox_image is None:
-            return DeleteSandboxImageResult(deleted=False, not_found=True, message="Sandbox image not found")
+            raise NotFoundError("Sandbox image not found")
 
         result = await session.exec(select(SandboxContainer.id).where(SandboxContainer.image_id == id).limit(1))
         if result.first() is not None:
-            return DeleteSandboxImageResult(
-                deleted=False,
-                message="Sandbox image is used by sandbox containers",
-            )
+            raise ValidationError("Sandbox image is used by sandbox containers")
 
         await session.delete(sandbox_image)
         await session.commit()
-
-    return DeleteSandboxImageResult(deleted=True)
 
 
 async def query_sandbox_images(

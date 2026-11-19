@@ -4,6 +4,7 @@ from sqlalchemy import String, cast, delete as sa_delete, or_
 from sqlmodel import select
 
 from core.agent.constants import DEFAULT_AGENT_CODE
+from core.errors import NotFoundError, ValidationError
 from database import get_async_session
 from model.work_project.assets import WorkProjectAsset
 from model.work_project.evidence import WorkProjectFindingEvidence
@@ -70,36 +71,33 @@ async def save_work_project_finding(
     finding_id: int | None = None,
     created_by_agent_code: str = "",
     created_from_session_id: str = "",
-) -> tuple[WorkProjectFindingSchema | None, str]:
+) -> WorkProjectFindingSchema:
     async with get_async_session() as session:
-        if error := await lock_active_work_project(session, project_id):
-            return None, error
+        await lock_active_work_project(session, project_id)
         asset_ids = {request.primary_asset_id, *(item.asset_id for item in request.affected_assets)}
         assets = list((await session.exec(select(WorkProjectAsset).where(WorkProjectAsset.id.in_(asset_ids)))).all())
         if len(assets) != len(asset_ids) or any(asset.project_id != project_id for asset in assets):
-            return None, "Asset not found"
-        _, error = await validate_active_evidence_ids(session, project_id, request.evidence_ids)
-        if error:
-            return None, error
+            raise NotFoundError("Asset not found")
+        await validate_active_evidence_ids(session, project_id, request.evidence_ids)
         finding = None
         if finding_id is not None:
             finding = (await session.exec(select(WorkProjectFinding).where(WorkProjectFinding.id == finding_id).with_for_update())).one_or_none()
             if finding is None or finding.project_id != project_id:
-                return None, "Finding not found"
+                raise NotFoundError("Finding not found")
             actor_code = created_by_agent_code.strip()
             if actor_code != DEFAULT_AGENT_CODE and finding.created_by_agent_code != actor_code:
-                return None, "Specialist agents can only update findings they created"
+                raise ValidationError("Specialist agents can only update findings they created")
             linked_steps = list((await session.exec(select(WorkProjectAttackPathStep).where(
                 WorkProjectAttackPathStep.finding_id == finding_id
             ))).all())
             request_asset_ids = {request.primary_asset_id, *(item.asset_id for item in request.affected_assets)}
             for step in linked_steps:
                 if not (request_asset_ids & {step.source_asset_id, step.target_asset_id}):
-                    return None, "Finding assets must remain linked to every attack path step that references it"
+                    raise ValidationError("Finding assets must remain linked to every attack path step that references it")
                 if request.verification == WorkProjectFindingVerification.REFUTED and step.status != WorkProjectAttackStepStatus.REFUTED:
-                    return None, "Revise non-refuted attack path steps before refuting their linked finding"
+                    raise ValidationError("Revise non-refuted attack path steps before refuting their linked finding")
                 if step.status == WorkProjectAttackStepStatus.VALIDATED and request.verification != WorkProjectFindingVerification.VALIDATED:
-                    return None, "Validated attack path steps require their linked finding to remain validated"
+                    raise ValidationError("Validated attack path steps require their linked finding to remain validated")
         now = datetime.now()
         previous_verification = finding.verification if finding is not None else None
         if finding is None:
@@ -143,4 +141,4 @@ async def save_work_project_finding(
         ])
         await session.commit()
         await session.refresh(finding)
-    return WorkProjectFindingSchema.model_validate(finding), ""
+    return WorkProjectFindingSchema.model_validate(finding)

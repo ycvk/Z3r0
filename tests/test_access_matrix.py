@@ -206,20 +206,21 @@ async def test_sandbox_containers_are_managed_by_their_owner_and_admins(api: tup
     assert await http.listed("bob", "/api/sandbox-containers") == {containers["bob"]}
 
     # Owning a project that is bound to a container does not make its other owners managers of the container.
+    # Reaching another user's container by id answers 404, matching a container that does not exist.
     files = "/api/sandbox-containers/{}/files"
     assert await http.statuses("GET", files.format(containers["alice"]), path="/") == {
-        "admin": ALLOWED_BUT_STOPPED, "alice": ALLOWED_BUT_STOPPED, "bob": 403,
+        "admin": ALLOWED_BUT_STOPPED, "alice": ALLOWED_BUT_STOPPED, "bob": 404,
     }
     assert await http.statuses("GET", files.format(containers["shared"]), path="/") == {
-        "admin": ALLOWED_BUT_STOPPED, "alice": ALLOWED_BUT_STOPPED, "bob": 403,
+        "admin": ALLOWED_BUT_STOPPED, "alice": ALLOWED_BUT_STOPPED, "bob": 404,
     }
     assert await http.statuses("GET", files.format(containers["bob"]), path="/") == {
-        "admin": ALLOWED_BUT_STOPPED, "alice": 403, "bob": ALLOWED_BUT_STOPPED,
+        "admin": ALLOWED_BUT_STOPPED, "alice": 404, "bob": ALLOWED_BUT_STOPPED,
     }
     assert await http.statuses("GET", files.format(MISSING_ID), path="/") == {"admin": 404, "alice": 404, "bob": 404}
 
-    assert await http.status("bob", "POST", f"/api/sandbox-containers/{containers['alice']}/stop") == 403
-    assert await http.status("bob", "POST", f"/api/sandbox-containers/{containers['shared']}/stop") == 403
+    assert await http.status("bob", "POST", f"/api/sandbox-containers/{containers['alice']}/stop") == 404
+    assert await http.status("bob", "POST", f"/api/sandbox-containers/{containers['shared']}/stop") == 404
     assert await http.status("bob", "POST", f"/api/sandbox-containers/{MISSING_ID}/stop") == 404
     assert await http.status("admin", "POST", f"/api/sandbox-containers/{MISSING_ID}/stop") == 404
 

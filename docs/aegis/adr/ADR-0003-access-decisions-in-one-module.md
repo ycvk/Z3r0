@@ -47,8 +47,8 @@ through `service`.
   two users on every list and record endpoint.
 - The same test checks that every scope returns exactly the records its
   `can_*` function accepts.
-- Every container endpoint answers 404 for a container that does not exist
-  and 403 for one the user may not manage.
+- Every record endpoint answers 404 when the record does not exist or the
+  caller may not use it.
 - User management, host management, and the subagent task records keep their
   own checks.
 

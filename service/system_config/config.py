@@ -1,8 +1,5 @@
 import asyncio
 from dataclasses import dataclass
-from http import HTTPStatus
-
-from fastapi import HTTPException
 
 from config import (
     AgentConfig,
@@ -17,6 +14,7 @@ from config import (
 )
 from core.agent.registry import AgentRegistry
 from core.delegation.subagents import start_subagent_runtime, stop_subagent_runtime
+from core.errors import ValidationError
 from core.lightrag.runtime import lightrag_client, restart_lightrag
 from core.runtime.session import AgentSessionPool, get_agent_pool, install_agent_pool
 from logger import get_logger
@@ -44,10 +42,7 @@ async def update_instance_config(request: UpdateInstanceConfigRequest) -> Instan
     async with _config_lock:
         current = read_config_file()
         if set(request.agents) != set(current.agents):
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST.value,
-                detail="Agent set cannot be changed",
-            )
+            raise ValidationError("Agent set cannot be changed")
 
         agents = {}
         for code, agent in current.agents.items():
@@ -158,9 +153,8 @@ async def _ensure_embedding_storage_compatible(current: LightRAGConfig, next_cfg
     async with lightrag_client() as rag:
         status_counts = await rag.get_processing_status()
     if any(int(count) > 0 for count in status_counts.values()):
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST.value,
-            detail="Embedding API, model, and dimension cannot change while LightRAG documents exist",
+        raise ValidationError(
+            "Embedding API, model, and dimension cannot change while LightRAG documents exist",
         )
 
 

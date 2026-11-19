@@ -6,8 +6,11 @@ from time import time
 from uuid import uuid4
 
 from config import get_config
+from core.errors import NotFoundError, ValidationError
 from logger import get_logger
 from schema.common.tool_results import ReportToolResultOutputSchema
+from schema.system_user.users import SystemUserRole
+from service.common.access import can_access_agent_session
 
 
 logger = get_logger(__name__)
@@ -46,8 +49,21 @@ def resolve_report_download_path(report_id: str) -> Path:
     session_id, file_id = _parse_report_id(report_id)
     resolved_path = (_safe_session_report_dir(session_id) / f"{file_id}{REPORT_EXTENSION}").resolve()
     if not _is_report_file_path(resolved_path):
-        raise FileNotFoundError("Report file not found")
+        raise NotFoundError("Report file not found")
     return resolved_path
+
+
+async def resolve_accessible_report_path(
+    report_id: str,
+    *,
+    user_id: int,
+    user_role: SystemUserRole,
+) -> Path:
+    report_path = resolve_report_download_path(report_id)
+    session_id = report_session_id(report_path)
+    if not session_id or not await can_access_agent_session(session_id, user_id, user_role):
+        raise NotFoundError("Report file not found")
+    return report_path
 
 
 def report_id_for_path(report_path: Path) -> str:
@@ -58,20 +74,20 @@ def report_id_for_path(report_path: Path) -> str:
         or report_path.suffix.lower() != REPORT_EXTENSION
         or not _REPORT_FILE_ID_PATTERN.fullmatch(file_id)
     ):
-        raise ValueError("Invalid report file")
+        raise ValidationError("Invalid report file")
     return f"{session_id}{_REPORT_ID_SEPARATOR}{file_id}"
 
 
 def _parse_report_id(report_id: str) -> tuple[str, str]:
     raw_report_id = report_id.strip()
     if not raw_report_id:
-        raise ValueError("Report ID is required")
+        raise ValidationError("Report ID is required")
     parts = raw_report_id.split(_REPORT_ID_SEPARATOR, 1)
     if len(parts) != 2:
-        raise ValueError("Report ID is invalid")
+        raise ValidationError("Report ID is invalid")
     session_id, file_id = parts[0].strip(), parts[1].strip()
     if not _REPORT_SESSION_PATTERN.fullmatch(session_id) or not _REPORT_FILE_ID_PATTERN.fullmatch(file_id):
-        raise ValueError("Report ID is invalid")
+        raise ValidationError("Report ID is invalid")
     return session_id, file_id
 
 
@@ -92,7 +108,7 @@ def latest_report_id_for_session(session_id: str) -> str | None:
         return None
     try:
         return report_id_for_path(files[0])
-    except ValueError:
+    except ValidationError:
         return None
 
 
@@ -150,17 +166,17 @@ async def _report_cleanup_loop() -> None:
 
 def _valid_report_content(content: str) -> str:
     if not isinstance(content, str) or not content.strip():
-        raise ValueError("Report content is required")
+        raise ValidationError("Report content is required")
     return content
 
 
 def _safe_session_report_dir(session_id: str) -> Path:
     normalized = session_id.strip()
     if not _REPORT_SESSION_PATTERN.fullmatch(normalized):
-        raise ValueError("Invalid session ID for report export")
+        raise ValidationError("Invalid session ID for report export")
     session_dir = (REPORT_ROOT / normalized).resolve()
     if not _is_relative_to(session_dir, REPORT_ROOT.resolve()):
-        raise ValueError("Invalid session ID for report export")
+        raise ValidationError("Invalid session ID for report export")
     return session_dir
 
 

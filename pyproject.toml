@@ -71,13 +71,13 @@ pythonPlatform = "Linux"
 typeCheckingMode = "basic"
 
 [tool.importlinter]
-root_packages = ["router", "handler", "tools", "service", "core", "middleware", "model", "schema", "utils"]
+root_packages = ["router", "handler", "tools", "service", "middleware", "core", "model", "schema", "utils"]
 
 [[tool.importlinter.contracts]]
 name = "Layers import downward only"
 type = "layers"
 # handler serves HTTP requests and tools serves agent tool calls; neither imports the other.
-layers = ["router", "handler | tools", "service", "core", "middleware", "model", "schema", "utils"]
+layers = ["router", "handler | tools", "service", "middleware", "core", "model", "schema", "utils"]
 
 [[tool.importlinter.contracts]]
 name = "HTTP entry points read records through services"

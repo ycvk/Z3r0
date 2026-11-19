@@ -1,8 +1,10 @@
 from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
 
 from sqlmodel import col, select
 
+from core.errors import DomainError, NotFoundError, ValidationError
 from core.runtime.coordination import cancel_session_subagents
 from core.sandbox.command_guard import clear_session_guard
 from core.sandbox.command_jobs import cancel_session_async_sandbox_commands
@@ -25,23 +27,19 @@ from schema.flow.flows import (
 )
 from schema.sandbox.containers import SandboxContainerStatus
 from schema.agent.sessions import SessionType
-from service.agent import runtime as agent_runtime
 from service.agent import credentials as agent_credentials
+from service.agent import reports as agent_reports
+from service.agent import runtime as agent_runtime
 from service.agent import sessions as agent_sessions
-from service.common.access import can_access_flow, can_manage_sandbox_container, flow_scope
+from service.common.access import can_access_flow, can_access_work_project, can_manage_sandbox_container, flow_scope
 from service.common.pagination import Page, paginate_statement
 from service.flow.locking import lock_flow_by_public_id
 from service.sandbox.records import load_sandbox_container_record
-from service.work_project.projects import get_work_project_for_user
 
 
 logger = get_logger(__name__)
 
 _TITLE_MAX_LEN = 80
-
-
-class FlowValidationError(ValueError):
-    pass
 
 
 def flow_title(goal: str) -> str:
@@ -139,17 +137,11 @@ async def _schema_for(flow: Flow) -> FlowSchema:
 async def create_flow(request: CreateFlowRequest, user: AuthUser) -> FlowSchema:
     record = await load_sandbox_container_record(request.sandbox_container_id)
     if record is None or not can_manage_sandbox_container(record.container, user.id, user.role):
-        raise FlowValidationError("sandbox container not found")
+        raise NotFoundError("sandbox container not found")
     if record.container.status != SandboxContainerStatus.RUNNING:
-        raise FlowValidationError("sandbox container is not running")
-    if request.project_id is not None:
-        project = await get_work_project_for_user(
-            request.project_id,
-            user_id=user.id,
-            user_role=user.role,
-        )
-        if project is None:
-            raise FlowValidationError("work project not found")
+        raise ValidationError("sandbox container is not running")
+    if request.project_id is not None and not await can_access_work_project(request.project_id, user.id, user.role):
+        raise NotFoundError("work project not found")
 
     title = flow_title(request.goal)
     public_id = str(uuid4())
@@ -217,19 +209,24 @@ async def list_flows(user: AuthUser, page: int, size: int) -> Page[FlowSummarySc
     )
 
 
-async def get_flow(public_id: str, user: AuthUser) -> FlowSchema | None:
+async def get_flow(public_id: str, user: AuthUser) -> FlowSchema:
     async with get_async_session() as session:
         flow = (await session.exec(select(Flow).where(Flow.public_id == public_id))).one_or_none()
     if flow is None or not can_access_flow(flow, user.id, user.role):
-        return None
+        raise NotFoundError("flow not found")
     return await _schema_for(flow)
 
 
-async def cancel_flow(public_id: str, user: AuthUser) -> FlowSchema | None:
+async def load_flow_schema(public_id: str) -> FlowSchema | None:
+    flow = await load_flow_row(public_id)
+    return await _schema_for(flow) if flow is not None else None
+
+
+async def cancel_flow(public_id: str, user: AuthUser) -> FlowSchema:
     async with get_async_session() as session:
         flow = await lock_flow_by_public_id(session, public_id)
         if flow is None or not can_access_flow(flow, user.id, user.role):
-            return None
+            raise NotFoundError("flow not found")
         if flow.status not in FLOW_TERMINAL_STATUSES:
             flow.status = FlowStatus.CANCELLED
             flow.ask_question = None
@@ -253,25 +250,33 @@ async def cancel_flow(public_id: str, user: AuthUser) -> FlowSchema | None:
     return await _schema_for(flow)
 
 
-async def answer_flow_input(public_id: str, user: AuthUser, text: str) -> FlowSchema | None:
+async def answer_flow_input(public_id: str, user: AuthUser, text: str) -> FlowSchema:
     flow = await get_flow(public_id, user)
-    if flow is None:
-        return None
     if flow.status != FlowStatus.WAITING:
-        raise FlowValidationError("flow is not waiting")
+        raise ValidationError("flow is not waiting")
     from service.flow.controller import submit_flow_input
     await submit_flow_input(public_id, text)
     return await get_flow(public_id, user)
+
+
+async def resolve_flow_report_path(public_id: str, user: AuthUser) -> Path:
+    flow = await get_flow(public_id, user)
+    if not flow.report_id:
+        raise NotFoundError("report not found")
+    try:
+        return agent_reports.resolve_report_download_path(flow.report_id)
+    except DomainError as exc:
+        raise NotFoundError("report not found") from exc
 
 
 async def add_flow_credential(
     public_id: str,
     request: CreateSessionCredentialRequest,
     user: AuthUser,
-) -> FlowSchema | None:
+) -> FlowSchema:
     flow = await load_flow_row(public_id)
     if flow is None or not can_access_flow(flow, user.id, user.role):
-        return None
+        raise NotFoundError("flow not found")
     await agent_credentials.upsert_credential(
         owner_id=user.id,
         session_id=flow.session_id,
@@ -289,17 +294,17 @@ async def remove_flow_credential(
     public_id: str,
     credential_id: int,
     user: AuthUser,
-) -> FlowSchema | None:
+) -> FlowSchema:
     flow = await load_flow_row(public_id)
     if flow is None or not can_access_flow(flow, user.id, user.role):
-        return None
+        raise NotFoundError("flow not found")
     deleted = await agent_credentials.delete_credential(
         credential_id,
         session_id=flow.session_id,
         project_id=flow.project_id,
     )
     if not deleted:
-        raise FlowValidationError("credential not found")
+        raise NotFoundError("credential not found")
     return await _schema_for(flow)
 
 

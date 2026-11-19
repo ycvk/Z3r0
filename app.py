@@ -12,6 +12,7 @@ from config import ROOT_PATH, get_config
 
 from core.agent.registry import AgentRegistry
 from core.delegation.subagents import start_subagent_runtime, stop_subagent_runtime
+from core.errors import DomainError
 from core.lightrag.runtime import start_lightrag, stop_lightrag
 from core.runtime.ports import RuntimePorts, install_runtime_ports
 from core.runtime.session import AgentSessionPool, get_agent_pool, install_agent_pool
@@ -19,6 +20,7 @@ from core.sandbox.command_jobs import start_async_sandbox_runtime, stop_async_sa
 from database import close_engine, init_engine, migrate_database
 from logger import get_logger
 from middleware.common import (
+    domain_exception_handler,
     http_exception_handler,
     request_validation_exception_handler,
     unhandled_exception_handler,
@@ -214,6 +216,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.add_exception_handler(DomainError, domain_exception_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

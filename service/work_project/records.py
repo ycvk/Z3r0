@@ -7,6 +7,7 @@ import json
 from sqlalchemy import String, cast, func, or_
 from sqlmodel import select
 
+from core.errors import NotFoundError
 from database import get_async_session
 from model.agent.subordinates import AgentSubordinateTask
 from model.sandbox.traffic import SandboxTrafficEntry
@@ -80,11 +81,19 @@ WORK_PROJECT_GRAPH_MAX_NODES = 1_000
 WORK_PROJECT_GRAPH_MAX_RELATIONS = 4_000
 
 
+async def _require_accessible_project(
+    project_id: int,
+    user_id: int,
+    user_role: SystemUserRole,
+) -> None:
+    if not await can_access_work_project(project_id, user_id, user_role):
+        raise NotFoundError("Work project not found")
+
+
 async def get_work_project_overview_for_user(
     project_id: int, *, user_id: int, user_role: SystemUserRole,
-) -> WorkProjectOverviewSchema | None:
-    if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+) -> WorkProjectOverviewSchema:
+    await _require_accessible_project(project_id, user_id, user_role)
     async with get_async_session() as session:
         assets = list((await session.exec(select(WorkProjectAsset).where(WorkProjectAsset.project_id == project_id))).all())
         targets = list((await session.exec(
@@ -140,7 +149,7 @@ async def query_work_project_assets_for_user(
     user_role: SystemUserRole,
 ):
     if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+        raise NotFoundError("Work project not found")
     return await query_work_project_assets(
         project_id, page=page, size=size, keyword=keyword, kind=kind, scope=scope
     )
@@ -158,7 +167,7 @@ async def query_work_project_evidence_for_user(
     user_role: SystemUserRole,
 ):
     if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+        raise NotFoundError("Work project not found")
     result = await query_work_project_evidence(
         project_id, page=page, size=size, keyword=keyword, kind=kind, status=status
     )
@@ -186,7 +195,7 @@ async def query_work_project_findings_for_user(
     user_role: SystemUserRole,
 ):
     if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+        raise NotFoundError("Work project not found")
     statement = select(WorkProjectFinding).where(WorkProjectFinding.project_id == project_id).order_by(WorkProjectFinding.id.desc())
     if verification is not None:
         statement = statement.where(WorkProjectFinding.verification == verification)
@@ -238,7 +247,7 @@ async def query_work_project_attack_paths_for_user(
     user_role: SystemUserRole,
 ):
     if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+        raise NotFoundError("Work project not found")
     statement = select(WorkProjectAttackPath).where(WorkProjectAttackPath.project_id == project_id)
     if keyword := keyword.strip():
         pattern = f"%{keyword}%"
@@ -297,7 +306,7 @@ async def query_work_project_work_items_for_user(
     user_role: SystemUserRole,
 ):
     if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+        raise NotFoundError("Work project not found")
     return await query_work_project_work_item_records(
         project_id,
         page=page,
@@ -310,7 +319,7 @@ async def query_work_project_work_items_for_user(
 
 async def query_work_project_activity_for_user(project_id: int, *, page: int, size: int, user_id: int, user_role: SystemUserRole):
     if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+        raise NotFoundError("Work project not found")
     result = await paginate_statement(
         select(WorkProjectWorkLog).where(WorkProjectWorkLog.project_id == project_id).order_by(WorkProjectWorkLog.id.desc()),
         page=page, size=size,
@@ -320,7 +329,7 @@ async def query_work_project_activity_for_user(project_id: int, *, page: int, si
 
 async def get_work_project_graph_for_user(project_id: int, *, user_id: int, user_role: SystemUserRole):
     if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+        raise NotFoundError("Work project not found")
     async with get_async_session() as session:
         assets = list((await session.exec(select(WorkProjectAsset).where(WorkProjectAsset.project_id == project_id).order_by(WorkProjectAsset.id).limit(WORK_PROJECT_GRAPH_MAX_NODES + 1))).all())
         visible = assets[:WORK_PROJECT_GRAPH_MAX_NODES]
@@ -375,9 +384,8 @@ async def query_work_project_credentials_for_user(
     keyword: str,
     user_id: int,
     user_role: SystemUserRole,
-) -> Page[SessionCredentialSchema] | None:
-    if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+) -> Page[SessionCredentialSchema]:
+    await _require_accessible_project(project_id, user_id, user_role)
     return await agent_credentials.query_project_credentials(
         project_id,
         page=page,
@@ -392,9 +400,8 @@ async def create_work_project_credential_for_user(
     *,
     user_id: int,
     user_role: SystemUserRole,
-) -> SessionCredentialSchema | None:
-    if not await can_access_work_project(project_id, user_id, user_role):
-        return None
+) -> SessionCredentialSchema:
+    await _require_accessible_project(project_id, user_id, user_role)
     return await agent_credentials.upsert_credential(
         owner_id=user_id,
         session_id="",
@@ -413,13 +420,14 @@ async def delete_work_project_credential_for_user(
     *,
     user_id: int,
     user_role: SystemUserRole,
-) -> bool | None:
-    if not await can_access_work_project(project_id, user_id, user_role):
-        return None
-    return await agent_credentials.delete_credential(
+) -> None:
+    await _require_accessible_project(project_id, user_id, user_role)
+    deleted = await agent_credentials.delete_credential(
         credential_id,
         project_id=project_id,
     )
+    if not deleted:
+        raise NotFoundError("Credential not found")
 
 
 def _format_traffic_evidence_summary(entry: SandboxTrafficEntry, note: str) -> str:
@@ -489,27 +497,22 @@ async def create_work_project_evidence_from_traffic_for_user(
     *,
     user_id: int,
     user_role: SystemUserRole,
-) -> tuple[WorkProjectEvidenceRecordSchema | None, str, bool]:
-    """Create an HTTP_EXCHANGE evidence record from a captured traffic entry.
-
-    Returns (record, error_message, not_found).
-    """
-    if not await can_access_work_project(project_id, user_id, user_role):
-        return None, "Work project not found", True
+) -> WorkProjectEvidenceRecordSchema:
+    await _require_accessible_project(project_id, user_id, user_role)
 
     async with get_async_session() as session:
         project = await session.get(WorkProject, project_id)
         if project is None:
-            return None, "Work project not found", True
+            raise NotFoundError("Work project not found")
         entry = await session.get(SandboxTrafficEntry, traffic_id)
         if entry is None:
-            return None, "Traffic entry not found", True
+            raise NotFoundError("Traffic entry not found")
         belongs_to_project = entry.project_id == project_id or (
             project.sandbox_container_id is not None
             and entry.sandbox_container_id == project.sandbox_container_id
         )
         if not belongs_to_project:
-            return None, "Traffic entry not found", True
+            raise NotFoundError("Traffic entry not found")
 
     default_title = f"{entry.method} {entry.host}{entry.path} [{entry.status_code}]".strip()
     title = (request.title or default_title or f"HTTP exchange #{traffic_id}")[:255]
@@ -526,14 +529,12 @@ async def create_work_project_evidence_from_traffic_for_user(
         work_item_id=request.work_item_id,
         captured_at=entry.created_at,
     )
-    created, error = await create_work_project_evidence(
+    created = await create_work_project_evidence(
         project_id,
         ev_request,
         created_by_agent_code=OPERATOR_EVIDENCE_ACTOR,
         created_from_session_id="",
     )
-    if created is None:
-        return None, error or "Failed to create evidence", False
 
     primary_asset_schema: WorkProjectAssetSchema | None = None
     if created.primary_asset_id is not None:
@@ -541,4 +542,4 @@ async def create_work_project_evidence_from_traffic_for_user(
             asset = await session.get(WorkProjectAsset, created.primary_asset_id)
             if asset is not None:
                 primary_asset_schema = WorkProjectAssetSchema.model_validate(asset)
-    return WorkProjectEvidenceRecordSchema(evidence=created, primary_asset=primary_asset_schema), "", False
+    return WorkProjectEvidenceRecordSchema(evidence=created, primary_asset=primary_asset_schema)

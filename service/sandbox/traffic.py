@@ -9,6 +9,7 @@ import httpx
 from sqlalchemy import delete, func, or_
 from sqlmodel import col, select
 
+from core.errors import NotFoundError
 from database import get_async_session
 from logger import get_logger
 from model.sandbox.containers import SandboxContainer
@@ -45,10 +46,6 @@ _TRAFFIC_SYNC_BATCH_SIZE = 16
 
 _traffic_sync_task: asyncio.Task[None] | None = None
 _container_sync_locks: dict[int, asyncio.Lock] = {}
-
-
-class TrafficAccessError(PermissionError):
-    pass
 
 
 def _sync_lock_for(container_id: int) -> asyncio.Lock:
@@ -158,10 +155,10 @@ async def _ensure_scope_access(
 ) -> None:
     if sandbox_container_id is not None:
         if not await can_view_sandbox_container(sandbox_container_id, user_id, user_role):
-            raise TrafficAccessError("sandbox container not found")
+            raise NotFoundError("sandbox container not found")
     if project_id is not None:
         if not await can_access_work_project(project_id, user_id, user_role):
-            raise TrafficAccessError("work project not found")
+            raise NotFoundError("work project not found")
 
 
 async def _resolve_container_owner_and_project(
@@ -527,11 +524,11 @@ async def get_traffic_entry(
     *,
     user_id: int,
     user_role: SystemUserRole,
-) -> TrafficEntryDetailSchema | None:
+) -> TrafficEntryDetailSchema:
     async with get_async_session() as session:
         row = await session.get(SandboxTrafficEntry, traffic_id)
     if row is None or not await can_view_traffic_entry(row, user_id, user_role):
-        return None
+        raise NotFoundError(f"Traffic entry {traffic_id} not found")
     return _to_detail(row)
 
 

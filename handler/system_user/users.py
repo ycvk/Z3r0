@@ -1,6 +1,3 @@
-from http import HTTPStatus
-
-from handler.common.http import raise_api_error
 from schema.common.responses import CommonResponse
 from schema.system_user.users import (
     CreateSystemUserRequest,
@@ -11,55 +8,40 @@ from schema.system_user.users import (
     SystemUserSchema,
     UpdateSystemUserRequest,
 )
+from service.common.pagination import paginated_payload
 from service.system_user.users import (
-    SystemUserConflictError,
     create_system_user,
     delete_system_user,
     query_system_users,
     system_user_login,
     update_system_user,
 )
-from service.common.pagination import paginated_payload
 
 
 async def create_system_user_handler(request: CreateSystemUserRequest) -> CommonResponse:
-    try:
-        system_user = await create_system_user(
-            username=request.username,
-            password=request.password,
-            email=request.email,
-            role=request.role,
-        )
-    except SystemUserConflictError as exc:
-        raise_api_error(HTTPStatus.CONFLICT, str(exc))
+    system_user = await create_system_user(
+        username=request.username,
+        password=request.password,
+        email=request.email,
+        role=request.role,
+    )
     return CommonResponse(data=SystemUserSchema.model_validate(system_user))
 
 
 async def delete_system_user_handler(id: int) -> CommonResponse:
-    result = await delete_system_user(id)
-    if result.not_found:
-        raise_api_error(HTTPStatus.NOT_FOUND, "System user not found")
-    if not result.deleted:
-        raise_api_error(HTTPStatus.BAD_REQUEST, result.message)
+    await delete_system_user(id)
     return CommonResponse(data=DeleteSystemUserResponse(id=id))
 
 
 async def update_system_user_handler(id: int, request: UpdateSystemUserRequest) -> CommonResponse:
-    try:
-        result = await update_system_user(
-            id=id,
-            username=request.username,
-            password=request.password,
-            email=request.email,
-            role=request.role,
-        )
-    except SystemUserConflictError as exc:
-        raise_api_error(HTTPStatus.CONFLICT, str(exc))
-    if result.not_found:
-        raise_api_error(HTTPStatus.NOT_FOUND, "System user not found")
-    if result.user is None or result.message:
-        raise_api_error(HTTPStatus.BAD_REQUEST, result.message)
-    return CommonResponse(data=SystemUserSchema.model_validate(result.user))
+    system_user = await update_system_user(
+        id=id,
+        username=request.username,
+        password=request.password,
+        email=request.email,
+        role=request.role,
+    )
+    return CommonResponse(data=SystemUserSchema.model_validate(system_user))
 
 
 async def query_system_users_handler(page: int, size: int, keyword: str) -> CommonResponse:
@@ -74,6 +56,4 @@ async def query_system_users_handler(page: int, size: int, keyword: str) -> Comm
 
 async def system_user_login_handler(request: SystemUserLoginRequest) -> CommonResponse:
     token = await system_user_login(email=request.email, password=request.password)
-    if token is None:
-        raise_api_error(HTTPStatus.UNAUTHORIZED, "Invalid email or password")
     return CommonResponse(data=SystemUserLoginResponse(token=token))

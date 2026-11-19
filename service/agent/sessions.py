@@ -7,6 +7,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from core.agent.constants import DEFAULT_AGENT_CODE
+from core.errors import NotFoundError
 from core.runtime.coordination import cancel_session_subagents
 from core.runtime.event_log import fetch_timeline_page
 from core.runtime.session import get_agent_pool, get_agent_registry
@@ -48,7 +49,7 @@ async def create_session(
     async with get_async_session() as session:
         await lock_system_user_lifecycle(session, user_id)
         if await session.get(SystemUser, user_id) is None:
-            raise PermissionError("System user no longer exists")
+            raise NotFoundError("System user no longer exists")
         await ensure_sdk_session_row(session, session_id)
         session.add(AgentSessionMeta(
             session_id=session_id,
@@ -69,11 +70,11 @@ async def update_session_title(
     title: str,
     user_id: int,
     user_role: SystemUserRole,
-) -> AgentSessionSummarySchema | None:
+) -> AgentSessionSummarySchema:
     async with get_async_session() as session:
         meta = await session.get(AgentSessionMeta, session_id)
         if meta is None or not await can_access_agent_session_in_tx(session, meta, user_id, user_role):
-            return None
+            raise NotFoundError("Agent session not found")
         meta.title = title
         session.add(meta)
         await session.commit()
@@ -94,7 +95,7 @@ async def ensure_chat_session_meta(
     async with get_async_session() as session:
         meta = await session.get(AgentSessionMeta, session_id)
         if meta is None or not await can_access_agent_session_in_tx(session, meta, user_id, user_role):
-            raise PermissionError("Agent session not found")
+            raise NotFoundError("Agent session not found")
         existing = meta.agent_code if meta and meta.agent_code in valid else None
         resolved = override or existing or DEFAULT_AGENT_CODE
 
@@ -131,10 +132,13 @@ async def session_summary(
     session_id: str,
     user_id: int,
     user_role: SystemUserRole,
-) -> AgentSessionSummarySchema | None:
+) -> AgentSessionSummarySchema:
     if not await can_access_agent_session(session_id, user_id, user_role):
-        return None
-    return await _session_summary_by_id(session_id)
+        raise NotFoundError("Agent session not found")
+    summary = await _session_summary_by_id(session_id)
+    if summary is None:
+        raise NotFoundError("Agent session not found")
+    return summary
 
 
 async def _list_sessions(
@@ -245,11 +249,11 @@ async def update_session_sandbox_container(
     sandbox_container_generation: int,
     user_id: int,
     user_role: SystemUserRole,
-) -> AgentSessionSummarySchema | None:
+) -> AgentSessionSummarySchema:
     async with get_async_session() as session:
         meta = await session.get(AgentSessionMeta, session_id)
         if meta is None or not await can_access_agent_session_in_tx(session, meta, user_id, user_role):
-            return None
+            raise NotFoundError("Agent session not found")
         meta.selected_sandbox_container_id = sandbox_container_id
         meta.selected_sandbox_container_generation = sandbox_container_generation
         session.add(meta)
@@ -261,7 +265,7 @@ async def replay_session_events(
     session_id: str,
     user_id: int,
     user_role: SystemUserRole,
-) -> tuple[list[AgentContentEventSchema], bool, int | None] | None:
+) -> tuple[list[AgentContentEventSchema], bool, int | None]:
     return await replay_session_events_page(
         session_id=session_id,
         user_id=user_id,
@@ -278,7 +282,7 @@ async def replay_session_events_page(
     *,
     before_seq: int | None,
     limit: int,
-) -> tuple[list[AgentContentEventSchema], bool, int | None] | None:
+) -> tuple[list[AgentContentEventSchema], bool, int | None]:
     """Return one turn-aligned page of the persisted UI timeline, by seq cursor.
 
     The timeline log already stores the exact wire events (with stable identity
@@ -286,7 +290,7 @@ async def replay_session_events_page(
     derivation, identity remapping, or content-based de-duplication.
     """
     if not await can_access_agent_session(session_id, user_id, user_role):
-        return None
+        raise NotFoundError("Agent session not found")
 
     await get_agent_pool().flush_timeline(session_id)
 
@@ -358,6 +362,16 @@ async def delete_session(
     if records_deleted:
         logger.info("Agent session deleted: %s", session_id)
     return records_deleted
+
+
+async def delete_session_for_user(
+    session_id: str,
+    *,
+    user_id: int,
+    user_role: SystemUserRole,
+) -> None:
+    if not await delete_session(session_id, user_id=user_id, user_role=user_role):
+        raise NotFoundError("Agent session not found")
 
 
 async def delete_private_sessions_for_owner(owner_id: int) -> int:

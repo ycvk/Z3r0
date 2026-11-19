@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from datetime import datetime
 import asyncio
 import base64
@@ -10,43 +9,22 @@ from urllib.parse import urlsplit
 from sqlalchemy import String, cast, or_
 from sqlmodel import select
 
+from core.errors import NotFoundError, ValidationError
 from database import get_async_session
+from logger import get_logger
 from model.egress_proxy.proxies import EgressProxy
 from model.sandbox.containers import SandboxContainer
-from schema.egress_proxy.proxies import EgressProxyType
+from schema.egress_proxy.proxies import EgressProxyType, TestEgressProxyResponse
 from schema.sandbox.containers import SandboxContainerEgressMode
 from service.common.pagination import Page, RESOURCE_PAGE_SIZE, paginate_statement
 from service.egress_proxy.locking import egress_proxy_mutation_lock
 from service.sandbox.control_proxy import apply_managed_proxy_egress_to_running_containers
 
 
+logger = get_logger(__name__)
+
 EGRESS_PROXY_TEST_URL = "https://www.gstatic.com/generate_204"
 EGRESS_PROXY_TEST_TIMEOUT_SECONDS = 8.0
-
-
-@dataclass(frozen=True)
-class DeleteEgressProxyResult:
-    deleted: bool
-    not_found: bool = False
-    message: str = ""
-
-
-@dataclass(frozen=True)
-class UpdateEgressProxyResult:
-    proxy: EgressProxy | None
-    not_found: bool = False
-    message: str = ""
-    failed_container_ids: tuple[int, ...] = ()
-
-
-@dataclass(frozen=True)
-class TestEgressProxyResult:
-    id: int
-    success: bool
-    status_code: int | None
-    elapsed_ms: int
-    message: str
-    not_found: bool = False
 
 
 async def create_egress_proxy(
@@ -81,7 +59,7 @@ async def update_egress_proxy(
     proxy_port: int | None = None,
     proxy_account: str | None = None,
     proxy_password: str | None = None,
-) -> UpdateEgressProxyResult:
+) -> EgressProxy:
     async with egress_proxy_mutation_lock(id):
         return await _update_egress_proxy(
             id=id,
@@ -100,13 +78,13 @@ async def _update_egress_proxy(
     proxy_port: int | None,
     proxy_account: str | None,
     proxy_password: str | None,
-) -> UpdateEgressProxyResult:
+) -> EgressProxy:
     async with get_async_session() as session:
         proxy = (await session.exec(
             select(EgressProxy).where(EgressProxy.id == id).with_for_update()
         )).one_or_none()
         if proxy is None:
-            return UpdateEgressProxyResult(proxy=None, not_found=True, message="Egress proxy not found")
+            raise NotFoundError("Egress proxy not found")
 
         if proxy_type is not None:
             proxy.proxy_type = proxy_type
@@ -125,33 +103,32 @@ async def _update_egress_proxy(
         await session.refresh(proxy)
 
     failed_container_ids = await apply_managed_proxy_egress_to_running_containers(id)
-    return UpdateEgressProxyResult(
-        proxy=proxy,
-        failed_container_ids=tuple(failed_container_ids),
-    )
+    if failed_container_ids:
+        logger.warning(
+            "Egress proxy updated but failed to apply to running containers: proxy=%s containers=%s",
+            id,
+            tuple(failed_container_ids),
+        )
+    return proxy
 
 
-async def delete_egress_proxy(id: int) -> DeleteEgressProxyResult:
+async def delete_egress_proxy(id: int) -> None:
     async with egress_proxy_mutation_lock(id):
-        return await _delete_egress_proxy(id)
+        await _delete_egress_proxy(id)
 
 
-async def _delete_egress_proxy(id: int) -> DeleteEgressProxyResult:
+async def _delete_egress_proxy(id: int) -> None:
     async with get_async_session() as session:
         proxy = (await session.exec(
             select(EgressProxy).where(EgressProxy.id == id).with_for_update()
         )).one_or_none()
         if proxy is None:
-            return DeleteEgressProxyResult(deleted=False, not_found=True, message="Egress proxy not found")
+            raise NotFoundError("Egress proxy not found")
         if await _egress_proxy_has_sandbox_containers(session, id):
-            return DeleteEgressProxyResult(
-                deleted=False,
-                message="Egress proxy is used by sandbox containers",
-            )
+            raise ValidationError("Egress proxy is used by sandbox containers")
 
         await session.delete(proxy)
         await session.commit()
-        return DeleteEgressProxyResult(deleted=True)
 
 
 async def query_egress_proxies(
@@ -181,23 +158,16 @@ async def query_egress_proxy_by_id(id: int) -> EgressProxy | None:
         return await session.get(EgressProxy, id)
 
 
-async def test_egress_proxy(id: int) -> TestEgressProxyResult:
+async def test_egress_proxy(id: int) -> TestEgressProxyResponse:
     proxy = await query_egress_proxy_by_id(id)
     if proxy is None:
-        return TestEgressProxyResult(
-            id=id,
-            success=False,
-            status_code=None,
-            elapsed_ms=0,
-            message="Egress proxy not found",
-            not_found=True,
-        )
+        raise NotFoundError("Egress proxy not found")
 
     started = perf_counter()
     try:
         status_code = await _test_proxy_connectivity(proxy)
     except (OSError, TimeoutError, ValueError) as exc:
-        return TestEgressProxyResult(
+        return TestEgressProxyResponse(
             id=id,
             success=False,
             status_code=None,
@@ -207,7 +177,7 @@ async def test_egress_proxy(id: int) -> TestEgressProxyResult:
 
     elapsed_ms = int((perf_counter() - started) * 1000)
     success = 200 <= status_code < 400
-    return TestEgressProxyResult(
+    return TestEgressProxyResponse(
         id=id,
         success=success,
         status_code=status_code,
