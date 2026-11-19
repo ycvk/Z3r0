@@ -109,7 +109,7 @@ func TestHTTPSMITMDecryptAndRecord(t *testing.T) {
 		t.Fatalf("unexpected wire body 2: %s", string(decodedWire))
 	}
 
-	entries, lastSeq := sandboxTraffic.Since(0)
+	entries, lastSeq := waitForTrafficEntries(2)
 	if len(entries) != 2 || lastSeq < 2 {
 		t.Fatalf("expected 2 captured HTTPS entries, got %d (lastSeq=%d)", len(entries), lastSeq)
 	}

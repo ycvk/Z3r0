@@ -17,6 +17,20 @@ import (
 	"time"
 )
 
+// The proxy records an exchange after it has written the response, so a client can finish reading
+// before the entry exists. waitForTrafficEntries returns once the ring holds want entries, or what
+// it holds after five seconds.
+func waitForTrafficEntries(want int) ([]proxyTrafficEntry, int64) {
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		entries, lastSeq := sandboxTraffic.Since(0)
+		if len(entries) >= want || time.Now().After(deadline) {
+			return entries, lastSeq
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func TestDecodeCapturedBodyDecodesSupportedCodingsOnly(t *testing.T) {
 	text := []byte(`{"flag":"FLAG{decoded}"}`)
 
@@ -142,7 +156,7 @@ func TestProxyForwardsOnlyDecodableAcceptEncodings(t *testing.T) {
 		}
 	}
 
-	entries, _ := sandboxTraffic.Since(0)
+	entries, _ := waitForTrafficEntries(2)
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 captured entries, got %d", len(entries))
 	}
