@@ -198,6 +198,18 @@
   color: var(--z-text-strong);
 }
 
+.session-row-meta {
+  display: block;
+  overflow: hidden;
+  color: var(--z-text-subtle);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.25;
+  opacity: 0.78;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-row .semi-button {
   flex: 0 0 auto;
   width: 28px;

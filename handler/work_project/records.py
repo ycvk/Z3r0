@@ -2,14 +2,18 @@ from http import HTTPStatus
 
 from handler.common.http import raise_api_error
 from middleware.system_user import AuthUser
+from schema.agent.credentials import CreateSessionCredentialRequest
 from schema.common.responses import CommonResponse
 from schema.work_project.assets import WorkProjectAssetKind, WorkProjectAssetScope
 from schema.work_project.evidence import WorkProjectEvidenceKind, WorkProjectEvidenceStatus
 from schema.work_project.findings import WorkProjectFindingSeverity, WorkProjectFindingVerification
 from schema.work_project.records import (
+    CreateTrafficEvidenceRequest,
+    DeleteWorkProjectCredentialResponse,
     QueryWorkProjectActivityResponse,
     QueryWorkProjectAssetsResponse,
     QueryWorkProjectAttackPathsResponse,
+    QueryWorkProjectCredentialsResponse,
     QueryWorkProjectEvidenceResponse,
     QueryWorkProjectFindingsResponse,
     QueryWorkProjectWorkItemsResponse,
@@ -17,11 +21,15 @@ from schema.work_project.records import (
 from schema.work_project.workflow import WorkProjectWorkItemStatus
 from service.common.pagination import paginated_payload
 from service.work_project.records import (
+    create_work_project_credential_for_user,
+    create_work_project_evidence_from_traffic_for_user,
+    delete_work_project_credential_for_user,
     get_work_project_graph_for_user,
     get_work_project_overview_for_user,
     query_work_project_activity_for_user,
     query_work_project_assets_for_user,
     query_work_project_attack_paths_for_user,
+    query_work_project_credentials_for_user,
     query_work_project_evidence_for_user,
     query_work_project_findings_for_user,
     query_work_project_work_items_for_user,
@@ -151,3 +159,78 @@ async def get_work_project_graph_handler(id: int, user: AuthUser) -> CommonRespo
     if result is None:
         raise_api_error(HTTPStatus.NOT_FOUND, "Work project not found")
     return CommonResponse(data=result)
+
+
+async def query_work_project_credentials_handler(
+    id: int,
+    page: int,
+    size: int,
+    keyword: str,
+    user: AuthUser,
+) -> CommonResponse:
+    return await _page_response(
+        query_work_project_credentials_for_user,
+        QueryWorkProjectCredentialsResponse,
+        id,
+        page,
+        size,
+        user,
+        keyword=keyword,
+    )
+
+
+async def create_work_project_credential_handler(
+    id: int,
+    request: CreateSessionCredentialRequest,
+    user: AuthUser,
+) -> CommonResponse:
+    try:
+        saved = await create_work_project_credential_for_user(
+            id,
+            request,
+            user_id=user.id,
+            user_role=user.role,
+        )
+    except ValueError as exc:
+        raise_api_error(HTTPStatus.BAD_REQUEST, str(exc))
+    if saved is None:
+        raise_api_error(HTTPStatus.NOT_FOUND, "Work project not found")
+    return CommonResponse(message="Credential saved", data=saved)
+
+
+async def delete_work_project_credential_handler(
+    id: int,
+    credential_id: int,
+    user: AuthUser,
+) -> CommonResponse:
+    deleted = await delete_work_project_credential_for_user(
+        id,
+        credential_id,
+        user_id=user.id,
+        user_role=user.role,
+    )
+    if deleted is None:
+        raise_api_error(HTTPStatus.NOT_FOUND, "Work project not found")
+    if not deleted:
+        raise_api_error(HTTPStatus.NOT_FOUND, "Credential not found")
+    return CommonResponse(message="Credential deleted", data=DeleteWorkProjectCredentialResponse(deleted=True))
+
+
+async def create_traffic_evidence_handler(
+    id: int,
+    traffic_id: int,
+    request: CreateTrafficEvidenceRequest,
+    user: AuthUser,
+) -> CommonResponse:
+    record, error, not_found = await create_work_project_evidence_from_traffic_for_user(
+        id,
+        traffic_id,
+        request,
+        user_id=user.id,
+        user_role=user.role,
+    )
+    if not_found:
+        raise_api_error(HTTPStatus.NOT_FOUND, error or "Resource not found")
+    if record is None:
+        raise_api_error(HTTPStatus.BAD_REQUEST, error or "Failed to create evidence")
+    return CommonResponse(message="HTTP exchange saved as evidence", data=record)

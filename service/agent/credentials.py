@@ -7,7 +7,9 @@ from sqlmodel import col, select
 
 from database import get_async_session
 from model.agent.credentials import SessionCredential
+from model.agent.sessions import AgentSessionMeta
 from schema.agent.credentials import SessionCredentialSchema
+from service.common.pagination import Page, paginate_statement
 
 
 def _to_schema(row: SessionCredential) -> SessionCredentialSchema:
@@ -22,6 +24,14 @@ def _to_schema(row: SessionCredential) -> SessionCredentialSchema:
         note=row.note,
         created_at=row.created_at,
         updated_at=row.updated_at,
+    )
+
+
+def _project_credential_scope_clause(project_id: int):
+    project_sessions = select(AgentSessionMeta.session_id).where(AgentSessionMeta.project_id == project_id)
+    return or_(
+        SessionCredential.project_id == project_id,
+        col(SessionCredential.session_id).in_(project_sessions),
     )
 
 
@@ -94,9 +104,9 @@ async def list_credentials_for_context(
 ) -> list[SessionCredentialSchema]:
     clauses = []
     if project_id is not None and session_id:
-        clauses.append(or_(SessionCredential.project_id == project_id, SessionCredential.session_id == session_id))
+        clauses.append(or_(_project_credential_scope_clause(project_id), SessionCredential.session_id == session_id))
     elif project_id is not None:
-        clauses.append(SessionCredential.project_id == project_id)
+        clauses.append(_project_credential_scope_clause(project_id))
     elif session_id:
         clauses.append(SessionCredential.session_id == session_id)
     else:
@@ -111,6 +121,37 @@ async def list_credentials_for_context(
     return [_to_schema(row) for row in rows]
 
 
+async def query_project_credentials(
+    project_id: int,
+    *,
+    page: int = 1,
+    size: int = 20,
+    keyword: str = "",
+) -> Page[SessionCredentialSchema]:
+    stmt = (
+        select(SessionCredential)
+        .where(_project_credential_scope_clause(project_id))
+        .order_by(col(SessionCredential.updated_at).desc(), col(SessionCredential.id).desc())
+    )
+    if cleaned := keyword.strip():
+        pattern = f"%{cleaned}%"
+        stmt = stmt.where(
+            or_(
+                col(SessionCredential.target).ilike(pattern),
+                col(SessionCredential.username).ilike(pattern),
+                col(SessionCredential.credential_type).ilike(pattern),
+                col(SessionCredential.note).ilike(pattern),
+            )
+        )
+    page_result = await paginate_statement(stmt, page=page, size=size)
+    return Page(
+        page=page_result.page,
+        size=page_result.size,
+        total=page_result.total,
+        items=[_to_schema(row) for row in page_result.items],
+    )
+
+
 async def delete_credential(
     credential_id: int,
     *,
@@ -121,11 +162,16 @@ async def delete_credential(
         row = await session.get(SessionCredential, credential_id)
         if row is None:
             return False
-        if project_id is not None and row.project_id == project_id:
-            pass
-        elif session_id and row.session_id == session_id:
-            pass
-        else:
+        matched = False
+        if project_id is not None:
+            if row.project_id == project_id:
+                matched = True
+            elif row.session_id:
+                meta = await session.get(AgentSessionMeta, row.session_id)
+                matched = meta is not None and meta.project_id == project_id
+        if not matched and session_id and row.session_id == session_id:
+            matched = True
+        if not matched:
             return False
         await session.delete(row)
         await session.commit()

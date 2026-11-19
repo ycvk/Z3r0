@@ -3,9 +3,14 @@ import { buildQuery } from "./query";
 import type {
   CancelWorkProjectPathParams,
   CancelWorkProjectResponse,
+  CreateSessionCredentialRequest,
+  CreateTrafficEvidenceRequest,
+  CreateTrafficEvidenceResponse,
+  CreateWorkProjectCredentialResponse,
   CreateWorkProjectRequest,
   CreateWorkProjectResponse,
   CreateWorkProjectSessionResponse,
+  DeleteWorkProjectCredentialResponse,
   DeleteWorkProjectSessionResponse,
   DeleteWorkProjectResponse,
   GetWorkProjectGraphResponse,
@@ -21,6 +26,8 @@ import type {
   QueryWorkProjectAttackPathsResponse,
   QueryWorkProjectActivityParams,
   QueryWorkProjectActivityResponse,
+  QueryWorkProjectCredentialsParams,
+  QueryWorkProjectCredentialsResponse,
   QueryWorkProjectEvidenceParams,
   QueryWorkProjectEvidenceResponse,
   QueryWorkProjectFindingsParams,
@@ -92,3 +99,15 @@ export const retryWorkProject = defineJsonEndpoint<
 export const deleteWorkProject = defineJsonEndpoint<[id: WorkProjectId], DeleteWorkProjectResponse>(
   "DELETE", (id) => `${WORK_PROJECTS_PATH}/${id}`,
 );
+export const queryWorkProjectCredentials = defineJsonEndpoint<
+  [id: WorkProjectId, params: QueryWorkProjectCredentialsParams], QueryWorkProjectCredentialsResponse
+>("GET", (id, params) => `${WORK_PROJECTS_PATH}/${id}/credentials${buildQuery(params)}`);
+export const createWorkProjectCredential = defineJsonEndpoint<
+  [id: WorkProjectId, payload: CreateSessionCredentialRequest], CreateWorkProjectCredentialResponse
+>("POST", (id) => `${WORK_PROJECTS_PATH}/${id}/credentials`, (_, payload) => payload);
+export const deleteWorkProjectCredential = defineJsonEndpoint<
+  [id: WorkProjectId, credentialId: number], DeleteWorkProjectCredentialResponse
+>("DELETE", (id, credentialId) => `${WORK_PROJECTS_PATH}/${id}/credentials/${credentialId}`);
+export const createTrafficEvidence = defineJsonEndpoint<
+  [id: WorkProjectId, trafficId: number, payload: CreateTrafficEvidenceRequest], CreateTrafficEvidenceResponse
+>("POST", (id, trafficId) => `${WORK_PROJECTS_PATH}/${id}/traffic/${trafficId}/evidence`, (_, __, payload) => payload);

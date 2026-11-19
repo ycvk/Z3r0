@@ -2,6 +2,7 @@ import { Button, Popconfirm, Tooltip } from "../../shared/ui/semi";
 import {
   Activity,
   Box,
+  Coins,
   FolderKanban,
   FolderOpen,
   Monitor,
@@ -34,6 +35,7 @@ import type { AgentInputPart, SandboxContainer } from "../../shared/api/types";
 import { getWorkProject } from "../../shared/api/workProjects";
 import { useOptionList } from "../../shared/hooks/useOptionList";
 import { cx } from "../../shared/lib/className";
+import { formatCompactTokens, formatTokenUsageTooltip } from "../../shared/lib/number";
 import { UI_TEXT } from "../../shared/lib/uiText";
 import { useContainerShell } from "../container-shell/ContainerShellProvider";
 import { WorkProjectInfoModal } from "../work-projects/WorkProjectInfoModal";
@@ -422,6 +424,14 @@ export function PlaygroundPage() {
       <Button icon={<Plus size={16} />} theme="solid" type="primary" onClick={() => selectSession(null)}>
         New chat
       </Button>
+      {activeSessionSummary && (activeSessionSummary.total_tokens ?? 0) > 0 ? (
+        <Tooltip content={formatTokenUsageTooltip(activeSessionSummary)} position="bottomRight">
+          <span className="session-token-pill" aria-label="Session token usage">
+            <Coins size={13} />
+            <span>{formatCompactTokens(activeSessionSummary.total_tokens ?? 0)} tok</span>
+          </span>
+        </Tooltip>
+      ) : null}
       <span className={cx("stream-status", `stream-status-${status}`)}>
         <Activity size={14} />
         <span>{STATUS_LABEL[status]}</span>
@@ -429,6 +439,7 @@ export function PlaygroundPage() {
     </>
   ), [
     activeProjectId,
+    activeSessionSummary,
     canPauseSelectedSandbox,
     canResumeSelectedSandbox,
     canStartSelectedSandbox,

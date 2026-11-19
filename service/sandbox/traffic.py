@@ -166,6 +166,12 @@ async def _can_access_work_project(
         return await session.get(WorkProjectOwner, (project_id, user_id)) is not None
 
 
+async def _bound_container_id_for_project(project_id: int) -> int | None:
+    async with get_async_session() as session:
+        project = await session.get(WorkProject, project_id)
+        return project.sandbox_container_id if project is not None else None
+
+
 async def _ensure_scope_access(
     *,
     user_id: int,
@@ -485,8 +491,14 @@ async def query_traffic(
         sandbox_container_id=sandbox_container_id,
         project_id=project_id,
     )
-    if sandbox_container_id is not None:
-        await sync_container_traffic(sandbox_container_id, owner_id=user_id, project_id=project_id)
+    project_bound_container_id = (
+        await _bound_container_id_for_project(project_id)
+        if project_id is not None and sandbox_container_id is None
+        else None
+    )
+    sync_container_id = sandbox_container_id if sandbox_container_id is not None else project_bound_container_id
+    if sync_container_id is not None:
+        await sync_container_traffic(sync_container_id, owner_id=user_id, project_id=project_id)
 
     stmt = select(SandboxTrafficEntry).order_by(col(SandboxTrafficEntry.id).desc())
     if user_role != SystemUserRole.ADMIN and sandbox_container_id is None and project_id is None:
@@ -494,7 +506,15 @@ async def query_traffic(
     if sandbox_container_id is not None:
         stmt = stmt.where(SandboxTrafficEntry.sandbox_container_id == sandbox_container_id)
     if project_id is not None:
-        stmt = stmt.where(SandboxTrafficEntry.project_id == project_id)
+        if sandbox_container_id is None and project_bound_container_id is not None:
+            stmt = stmt.where(
+                or_(
+                    SandboxTrafficEntry.project_id == project_id,
+                    SandboxTrafficEntry.sandbox_container_id == project_bound_container_id,
+                )
+            )
+        else:
+            stmt = stmt.where(SandboxTrafficEntry.project_id == project_id)
     if method.strip():
         stmt = stmt.where(SandboxTrafficEntry.method == method.strip().upper())
     if path.strip():
@@ -559,9 +579,15 @@ async def clear_traffic(
         sandbox_container_id=sandbox_container_id,
         project_id=project_id,
     )
-    if sandbox_container_id is not None:
-        async with _sync_lock_for(sandbox_container_id):
-            target = await resolve_sandbox_control_proxy_target(sandbox_container_id, require_running=True)
+    project_bound_container_id = (
+        await _bound_container_id_for_project(project_id)
+        if project_id is not None and sandbox_container_id is None
+        else None
+    )
+    clear_container_id = sandbox_container_id if sandbox_container_id is not None else project_bound_container_id
+    if clear_container_id is not None:
+        async with _sync_lock_for(clear_container_id):
+            target = await resolve_sandbox_control_proxy_target(clear_container_id, require_running=True)
             if target is not None:
                 await _request_proxy_traffic(
                     "DELETE",
@@ -575,7 +601,15 @@ async def clear_traffic(
     if sandbox_container_id is not None:
         stmt = stmt.where(SandboxTrafficEntry.sandbox_container_id == sandbox_container_id)
     if project_id is not None:
-        stmt = stmt.where(SandboxTrafficEntry.project_id == project_id)
+        if sandbox_container_id is None and project_bound_container_id is not None:
+            stmt = stmt.where(
+                or_(
+                    SandboxTrafficEntry.project_id == project_id,
+                    SandboxTrafficEntry.sandbox_container_id == project_bound_container_id,
+                )
+            )
+        else:
+            stmt = stmt.where(SandboxTrafficEntry.project_id == project_id)
     async with get_async_session() as session:
         result = await session.execute(stmt)
         await session.commit()

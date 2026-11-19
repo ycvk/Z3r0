@@ -1426,6 +1426,29 @@
   border-top: 1px dashed var(--z-line);
 }
 
+.project-record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-traffic-payload {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 360px;
+  overflow: auto;
+  border-radius: 6px;
+  border: 1px solid var(--z-line-soft);
+  background: var(--z-surface-muted);
+  color: var(--z-text-muted);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .record-warning {
   padding: 8px;
   color: var(--z-warning) !important;

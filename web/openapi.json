@@ -1163,6 +1163,32 @@
         "title": "CommonResponse[DeleteSystemUserResponse]",
         "type": "object"
       },
+      "CommonResponse_DeleteWorkProjectCredentialResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeleteWorkProjectCredentialResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[DeleteWorkProjectCredentialResponse]",
+        "type": "object"
+      },
       "CommonResponse_DeleteWorkProjectResponse_": {
         "properties": {
           "code": {
@@ -1943,6 +1969,32 @@
         "title": "CommonResponse[QueryWorkProjectAttackPathsResponse]",
         "type": "object"
       },
+      "CommonResponse_QueryWorkProjectCredentialsResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueryWorkProjectCredentialsResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[QueryWorkProjectCredentialsResponse]",
+        "type": "object"
+      },
       "CommonResponse_QueryWorkProjectEvidenceResponse_": {
         "properties": {
           "code": {
@@ -2099,6 +2151,32 @@
         "title": "CommonResponse[SandboxImageSchema]",
         "type": "object"
       },
+      "CommonResponse_SessionCredentialSchema_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionCredentialSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[SessionCredentialSchema]",
+        "type": "object"
+      },
       "CommonResponse_SystemUserLoginResponse_": {
         "properties": {
           "code": {
@@ -2253,6 +2331,32 @@
           }
         },
         "title": "CommonResponse[UploadKnowledgeDocumentsResponse]",
+        "type": "object"
+      },
+      "CommonResponse_WorkProjectEvidenceRecordSchema_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkProjectEvidenceRecordSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[WorkProjectEvidenceRecordSchema]",
         "type": "object"
       },
       "CommonResponse_WorkProjectGraphViewSchema_": {
@@ -2853,6 +2957,45 @@
         "title": "CreateSystemUserRequest",
         "type": "object"
       },
+      "CreateTrafficEvidenceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Note",
+            "type": "string"
+          },
+          "primary_asset_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Asset Id"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Title",
+            "type": "string"
+          },
+          "work_item_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Work Item Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "work_item_id"
+        ],
+        "title": "CreateTrafficEvidenceRequest",
+        "type": "object"
+      },
       "CreateWorkProjectRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3018,6 +3161,20 @@
           "id"
         ],
         "title": "DeleteSystemUserResponse",
+        "type": "object"
+      },
+      "DeleteWorkProjectCredentialResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "DeleteWorkProjectCredentialResponse",
         "type": "object"
       },
       "DeleteWorkProjectResponse": {
@@ -5154,6 +5311,37 @@
           "items"
         ],
         "title": "QueryWorkProjectAttackPathsResponse",
+        "type": "object"
+      },
+      "QueryWorkProjectCredentialsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SessionCredentialSchema"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page",
+          "size",
+          "total",
+          "items"
+        ],
+        "title": "QueryWorkProjectCredentialsResponse",
         "type": "object"
       },
       "QueryWorkProjectEvidenceResponse": {
@@ -15794,6 +15982,268 @@
         ]
       }
     },
+    "/api/work-projects/{id}/credentials": {
+      "get": {
+        "operationId": "query_work_project_credentials_route_api_work_projects__id__credentials_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Keyword",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_QueryWorkProjectCredentialsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Work project not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation error"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "Query Work Project Credentials Route",
+        "tags": [
+          "work-project-records"
+        ]
+      },
+      "post": {
+        "operationId": "create_work_project_credential_route_api_work_projects__id__credentials_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_SessionCredentialSchema_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Work project not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation error"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "Create Work Project Credential Route",
+        "tags": [
+          "work-project-records"
+        ]
+      }
+    },
+    "/api/work-projects/{id}/credentials/{credential_id}": {
+      "delete": {
+        "operationId": "delete_work_project_credential_route_api_work_projects__id__credentials__credential_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Credential Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_DeleteWorkProjectCredentialResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Work project not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation error"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "Delete Work Project Credential Route",
+        "tags": [
+          "work-project-records"
+        ]
+      }
+    },
     "/api/work-projects/{id}/evidence": {
       "get": {
         "operationId": "query_work_project_evidence_route_api_work_projects__id__evidence_get",
@@ -16604,6 +17054,103 @@
         "summary": "Delete Work Project Session Route",
         "tags": [
           "work-projects"
+        ]
+      }
+    },
+    "/api/work-projects/{id}/traffic/{traffic_id}/evidence": {
+      "post": {
+        "operationId": "create_traffic_evidence_route_api_work_projects__id__traffic__traffic_id__evidence_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "traffic_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Traffic Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTrafficEvidenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_WorkProjectEvidenceRecordSchema_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Work project not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation error"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "Create Traffic Evidence Route",
+        "tags": [
+          "work-project-records"
         ]
       }
     },

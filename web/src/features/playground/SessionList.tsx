@@ -18,6 +18,7 @@ import { useResourceSubmit } from "../../shared/hooks/useResourceSubmit";
 import { useMountedRef } from "../../shared/hooks/useMountedRef";
 import { mergeByKey } from "../../shared/lib/array";
 import { cx } from "../../shared/lib/className";
+import { formatCompactTokens, formatTokenUsageTooltip } from "../../shared/lib/number";
 import { UI_TEXT } from "../../shared/lib/uiText";
 import { WorkProjectInfoModal } from "../work-projects/WorkProjectInfoModal";
 import "../../app/styles/playground-layout.css";
@@ -30,6 +31,7 @@ type SessionListProps = {
   loadingMore: boolean;
   hasMore: boolean;
   activeSessionId: string | null;
+  activeSessionSummary: AgentSessionSummary | null;
   projectListVersion: number;
   onSelect: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
@@ -75,6 +77,7 @@ type ProjectGroupProps = {
   state?: ProjectSessionState;
   expanded: boolean;
   activeSessionId: string | null;
+  activeSessionSummary: AgentSessionSummary | null;
   onToggle: (projectId: number) => void;
   onShowInfo: (project: WorkProjectSummary) => void;
   onCreateSession: (project: WorkProjectSummary) => void;
@@ -95,6 +98,7 @@ export function SessionList({
   loadingMore,
   hasMore,
   activeSessionId,
+  activeSessionSummary,
   projectListVersion,
   onSelect,
   onDelete,
@@ -325,7 +329,7 @@ export function SessionList({
             {sessions.map((session) => (
               <ChatSessionRow
                 key={session.session_id}
-                session={session}
+                session={session.session_id === activeSessionId && activeSessionSummary ? activeSessionSummary : session}
                 active={session.session_id === activeSessionId}
                 onSelect={onSelect}
                 onDelete={onDelete}
@@ -350,6 +354,7 @@ export function SessionList({
                 state={projectSessions.get(project.id)}
                 expanded={expandedProjectId === project.id}
                 activeSessionId={activeSessionId}
+                activeSessionSummary={activeSessionSummary}
                 onToggle={toggleProject}
                 onShowInfo={showProjectInfo}
                 onCreateSession={(targetProject) => void createProjectSession(targetProject)}
@@ -427,6 +432,7 @@ function ProjectGroup({
   state,
   expanded,
   activeSessionId,
+  activeSessionSummary,
   onToggle,
   onShowInfo,
   onCreateSession,
@@ -482,7 +488,7 @@ function ProjectGroup({
           {state?.items.map((session) => (
             <ProjectSessionRow
               key={session.session_id}
-              session={session}
+              session={session.session_id === activeSessionId && activeSessionSummary ? activeSessionSummary : session}
               projectId={project.id}
               active={session.session_id === activeSessionId}
               onSelect={onSelectSession}
@@ -552,6 +558,8 @@ function SessionRow({
   onSelect,
 }: SessionRowProps) {
   const title = session.title || titleFallback;
+  const totalTokens = session.total_tokens ?? 0;
+  const llmRequests = session.llm_requests ?? 0;
   const rowClassName = cx("session-row", className, active && "session-row-active");
   const deleteButton = (
     <Button
@@ -569,6 +577,11 @@ function SessionRow({
         <span className="session-row-icon">{icon}</span>
         <span className="session-row-body">
           <span className="session-row-title">{title}</span>
+          {totalTokens > 0 ? (
+            <span className="session-row-meta" title={formatTokenUsageTooltip(session)}>
+              {formatCompactTokens(totalTokens)} tok{llmRequests > 0 ? ` · ${llmRequests} req` : ""}
+            </span>
+          ) : null}
         </span>
       </button>
       <Button

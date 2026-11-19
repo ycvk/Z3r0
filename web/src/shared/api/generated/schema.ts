@@ -1141,6 +1141,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/work-projects/{id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Query Work Project Credentials Route */
+        get: operations["query_work_project_credentials_route_api_work_projects__id__credentials_get"];
+        put?: never;
+        /** Create Work Project Credential Route */
+        post: operations["create_work_project_credential_route_api_work_projects__id__credentials_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work-projects/{id}/credentials/{credential_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Work Project Credential Route */
+        delete: operations["delete_work_project_credential_route_api_work_projects__id__credentials__credential_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/work-projects/{id}/evidence": {
         parameters: {
             query?: never;
@@ -1273,6 +1308,23 @@ export interface paths {
         post?: never;
         /** Delete Work Project Session Route */
         delete: operations["delete_work_project_session_route_api_work_projects__id__sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work-projects/{id}/traffic/{traffic_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Traffic Evidence Route */
+        post: operations["create_traffic_evidence_route_api_work_projects__id__traffic__traffic_id__evidence_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1869,6 +1921,20 @@ export interface components {
              */
             message: string;
         };
+        /** CommonResponse[DeleteWorkProjectCredentialResponse] */
+        CommonResponse_DeleteWorkProjectCredentialResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["DeleteWorkProjectCredentialResponse"] | null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
         /** CommonResponse[DeleteWorkProjectResponse] */
         CommonResponse_DeleteWorkProjectResponse_: {
             /**
@@ -2289,6 +2355,20 @@ export interface components {
              */
             message: string;
         };
+        /** CommonResponse[QueryWorkProjectCredentialsResponse] */
+        CommonResponse_QueryWorkProjectCredentialsResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["QueryWorkProjectCredentialsResponse"] | null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
         /** CommonResponse[QueryWorkProjectEvidenceResponse] */
         CommonResponse_QueryWorkProjectEvidenceResponse_: {
             /**
@@ -2373,6 +2453,20 @@ export interface components {
              */
             message: string;
         };
+        /** CommonResponse[SessionCredentialSchema] */
+        CommonResponse_SessionCredentialSchema_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["SessionCredentialSchema"] | null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
         /** CommonResponse[SystemUserLoginResponse] */
         CommonResponse_SystemUserLoginResponse_: {
             /**
@@ -2451,6 +2545,20 @@ export interface components {
              */
             code: number;
             data?: components["schemas"]["UploadKnowledgeDocumentsResponse"] | null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
+        /** CommonResponse[WorkProjectEvidenceRecordSchema] */
+        CommonResponse_WorkProjectEvidenceRecordSchema_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["WorkProjectEvidenceRecordSchema"] | null;
             /**
              * Message
              * @default success
@@ -2711,6 +2819,23 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** CreateTrafficEvidenceRequest */
+        CreateTrafficEvidenceRequest: {
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Primary Asset Id */
+            primary_asset_id?: number | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /** Work Item Id */
+            work_item_id: number;
+        };
         /** CreateWorkProjectRequest */
         CreateWorkProjectRequest: {
             /** Assets */
@@ -2773,6 +2898,11 @@ export interface components {
         DeleteSystemUserResponse: {
             /** Id */
             id: number;
+        };
+        /** DeleteWorkProjectCredentialResponse */
+        DeleteWorkProjectCredentialResponse: {
+            /** Deleted */
+            deleted: boolean;
         };
         /** DeleteWorkProjectResponse */
         DeleteWorkProjectResponse: {
@@ -3733,6 +3863,17 @@ export interface components {
         QueryWorkProjectAttackPathsResponse: {
             /** Items */
             items: components["schemas"]["WorkProjectAttackPathRecordSchema"][];
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+            /** Total */
+            total: number;
+        };
+        /** QueryWorkProjectCredentialsResponse */
+        QueryWorkProjectCredentialsResponse: {
+            /** Items */
+            items: components["schemas"]["SessionCredentialSchema"][];
             /** Page */
             page: number;
             /** Size */
@@ -10225,6 +10366,171 @@ export interface operations {
             };
         };
     };
+    query_work_project_credentials_route_api_work_projects__id__credentials_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+                keyword?: string;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_QueryWorkProjectCredentialsResponse_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Work project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    create_work_project_credential_route_api_work_projects__id__credentials_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSessionCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_SessionCredentialSchema_"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Work project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    delete_work_project_credential_route_api_work_projects__id__credentials__credential_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                credential_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_DeleteWorkProjectCredentialResponse_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Work project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
     query_work_project_evidence_route_api_work_projects__id__evidence_get: {
         parameters: {
             query?: {
@@ -10691,6 +10997,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommonResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Work project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    create_traffic_evidence_route_api_work_projects__id__traffic__traffic_id__evidence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                traffic_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTrafficEvidenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_WorkProjectEvidenceRecordSchema_"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
                 };
             };
             /** @description Unauthorized */

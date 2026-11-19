@@ -1,12 +1,15 @@
 """Bounded, user-visible work project projections."""
 
 from collections import Counter
+import hashlib
+import json
 
 from sqlalchemy import String, cast, func, or_
 from sqlmodel import select
 
 from database import get_async_session
 from model.agent.subordinates import AgentSubordinateTask
+from model.sandbox.traffic import SandboxTrafficEntry
 from model.work_project.assets import WorkProjectAsset
 from model.work_project.evidence import (
     WorkProjectAttackPathStepEvidence,
@@ -15,11 +18,13 @@ from model.work_project.evidence import (
 )
 from model.work_project.findings import WorkProjectFinding, WorkProjectFindingAsset
 from model.work_project.graph import WorkProjectAttackPath, WorkProjectAttackPathStep, WorkProjectRelation
+from model.work_project.projects import WorkProject
 from model.work_project.workflow import (
     WorkProjectWorkItem,
     WorkProjectWorkItemTarget,
     WorkProjectWorkLog,
 )
+from schema.agent.credentials import CreateSessionCredentialRequest, SessionCredentialSchema
 from schema.agent.subordinates import AgentSubordinateStatus
 from schema.system_user.users import SystemUserRole
 from schema.work_project.assets import (
@@ -29,6 +34,7 @@ from schema.work_project.assets import (
 )
 from schema.work_project.evidence import (
     WorkProjectEvidenceKind,
+    WorkProjectEvidenceRequest,
     WorkProjectEvidenceSchema,
     WorkProjectEvidenceStatus,
 )
@@ -46,6 +52,7 @@ from schema.work_project.graph import (
     derive_attack_path_status,
 )
 from schema.work_project.records import (
+    CreateTrafficEvidenceRequest,
     WorkProjectAttackPathRecordSchema,
     WorkProjectEvidenceRecordSchema,
     WorkProjectFindingRecordSchema,
@@ -57,9 +64,14 @@ from schema.work_project.workflow import (
     WorkProjectWorkItemStatus,
     WorkProjectWorkLogSchema,
 )
+from service.agent import credentials as agent_credentials
 from service.common.pagination import Page, paginate_statement
 from service.work_project.assets import query_work_project_assets
-from service.work_project.evidence import query_work_project_evidence
+from service.work_project.evidence import (
+    OPERATOR_EVIDENCE_ACTOR,
+    create_work_project_evidence,
+    query_work_project_evidence,
+)
 from service.work_project.projects import can_access_work_project
 from service.work_project.work_item_records import query_work_project_work_item_records
 
@@ -353,3 +365,180 @@ async def get_work_project_graph_for_user(project_id: int, *, user_id: int, user
         attack_path_counts=dict(path_counts),
         is_truncated=len(assets) > WORK_PROJECT_GRAPH_MAX_NODES or len(relations) > WORK_PROJECT_GRAPH_MAX_RELATIONS,
     )
+
+
+async def query_work_project_credentials_for_user(
+    project_id: int,
+    *,
+    page: int,
+    size: int,
+    keyword: str,
+    user_id: int,
+    user_role: SystemUserRole,
+) -> Page[SessionCredentialSchema] | None:
+    if not await can_access_work_project(project_id, user_id, user_role):
+        return None
+    return await agent_credentials.query_project_credentials(
+        project_id,
+        page=page,
+        size=size,
+        keyword=keyword,
+    )
+
+
+async def create_work_project_credential_for_user(
+    project_id: int,
+    request: CreateSessionCredentialRequest,
+    *,
+    user_id: int,
+    user_role: SystemUserRole,
+) -> SessionCredentialSchema | None:
+    if not await can_access_work_project(project_id, user_id, user_role):
+        return None
+    return await agent_credentials.upsert_credential(
+        owner_id=user_id,
+        session_id="",
+        project_id=project_id,
+        target=request.target,
+        credential_type=request.credential_type,
+        username=request.username,
+        secret=request.secret,
+        note=request.note,
+    )
+
+
+async def delete_work_project_credential_for_user(
+    project_id: int,
+    credential_id: int,
+    *,
+    user_id: int,
+    user_role: SystemUserRole,
+) -> bool | None:
+    if not await can_access_work_project(project_id, user_id, user_role):
+        return None
+    return await agent_credentials.delete_credential(
+        credential_id,
+        project_id=project_id,
+    )
+
+
+def _format_traffic_evidence_summary(entry: SandboxTrafficEntry, note: str) -> str:
+    sections: list[str] = []
+    if note:
+        sections.append(note)
+    sections.append(
+        f"**Exchange**: `{entry.method} {entry.url}` -> `{entry.status_code}` "
+        f"({entry.response_bytes} bytes, {entry.duration_ms} ms)"
+    )
+    try:
+        req_headers = json.loads(entry.request_headers_json or "{}")
+    except Exception:
+        req_headers = {}
+    try:
+        resp_headers = json.loads(entry.response_headers_json or "{}")
+    except Exception:
+        resp_headers = {}
+
+    req_lines = [f"{entry.method} {entry.path or '/'} HTTP/1.1"]
+    if entry.host:
+        req_lines.append(f"Host: {entry.host}")
+    if isinstance(req_headers, dict):
+        for k, v in list(req_headers.items())[:25]:
+            if k.lower() != "host":
+                req_lines.append(f"{k}: {v}")
+    if entry.request_body:
+        req_lines.extend(("", entry.request_body[:1800]))
+    sections.append("### Request\n```http\n" + "\n".join(req_lines) + "\n```")
+
+    resp_lines = [f"HTTP/1.1 {entry.status_code}"]
+    if isinstance(resp_headers, dict):
+        for k, v in list(resp_headers.items())[:25]:
+            resp_lines.append(f"{k}: {v}")
+    if entry.response_body:
+        resp_lines.extend(("", entry.response_body[:2400]))
+    sections.append("### Response\n```http\n" + "\n".join(resp_lines) + "\n```")
+    text = "\n\n".join(sections)
+    return text[:7950] + "\n...[truncated]" if len(text) > 8000 else text
+
+
+def _traffic_exchange_sha256(entry: SandboxTrafficEntry) -> str:
+    digest = hashlib.sha256()
+    for part in (
+        entry.method,
+        "\n",
+        entry.url,
+        "\n",
+        str(entry.status_code),
+        "\n",
+        entry.request_headers_json or "",
+        "\n",
+        entry.request_body or "",
+        "\n",
+        entry.response_headers_json or "",
+        "\n",
+        entry.response_body or "",
+    ):
+        digest.update(part.encode("utf-8", errors="replace"))
+    return digest.hexdigest()
+
+
+async def create_work_project_evidence_from_traffic_for_user(
+    project_id: int,
+    traffic_id: int,
+    request: CreateTrafficEvidenceRequest,
+    *,
+    user_id: int,
+    user_role: SystemUserRole,
+) -> tuple[WorkProjectEvidenceRecordSchema | None, str, bool]:
+    """Create an HTTP_EXCHANGE evidence record from a captured traffic entry.
+
+    Returns (record, error_message, not_found).
+    """
+    if not await can_access_work_project(project_id, user_id, user_role):
+        return None, "Work project not found", True
+
+    async with get_async_session() as session:
+        project = await session.get(WorkProject, project_id)
+        if project is None:
+            return None, "Work project not found", True
+        entry = await session.get(SandboxTrafficEntry, traffic_id)
+        if entry is None:
+            return None, "Traffic entry not found", True
+        belongs_to_project = entry.project_id == project_id or (
+            project.sandbox_container_id is not None
+            and entry.sandbox_container_id == project.sandbox_container_id
+        )
+        if not belongs_to_project:
+            return None, "Traffic entry not found", True
+
+    default_title = f"{entry.method} {entry.host}{entry.path} [{entry.status_code}]".strip()
+    title = (request.title or default_title or f"HTTP exchange #{traffic_id}")[:255]
+    reference = f"traffic://{traffic_id} {entry.method} {entry.url}".strip()[:2000]
+    summary = _format_traffic_evidence_summary(entry, request.note)
+
+    ev_request = WorkProjectEvidenceRequest(
+        kind=WorkProjectEvidenceKind.HTTP_EXCHANGE,
+        title=title,
+        summary=summary,
+        reference=reference,
+        sha256=_traffic_exchange_sha256(entry),
+        primary_asset_id=request.primary_asset_id,
+        work_item_id=request.work_item_id,
+        captured_at=entry.created_at,
+    )
+    created, error = await create_work_project_evidence(
+        project_id,
+        ev_request,
+        created_by_agent_code=OPERATOR_EVIDENCE_ACTOR,
+        created_from_session_id="",
+    )
+    if created is None:
+        return None, error or "Failed to create evidence", False
+
+    primary_asset_schema: WorkProjectAssetSchema | None = None
+    if created.primary_asset_id is not None:
+        async with get_async_session() as session:
+            asset = await session.get(WorkProjectAsset, created.primary_asset_id)
+            if asset is not None:
+                primary_asset_schema = WorkProjectAssetSchema.model_validate(asset)
+    return WorkProjectEvidenceRecordSchema(evidence=created, primary_asset=primary_asset_schema), "", False

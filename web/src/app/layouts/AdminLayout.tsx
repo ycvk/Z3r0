@@ -37,6 +37,7 @@ export function AdminLayout() {
     sessionsLoadingMore,
     sessionsHasMore,
     activeSessionId,
+    activeSessionSummary,
     selectSession,
     deleteSession,
     refreshSessions,
@@ -111,6 +112,7 @@ export function AdminLayout() {
                 loadingMore={sessionsLoadingMore}
                 hasMore={sessionsHasMore}
                 activeSessionId={activeSessionId}
+                activeSessionSummary={activeSessionSummary}
                 projectListVersion={projectListVersion}
                 onSelect={handleSelectAgentSession}
                 onDelete={deleteSession}

@@ -27,6 +27,7 @@ import {
   updateAgentSessionSandboxContainer,
 } from "../../shared/api/agentSessions";
 import { showApiError, showApiSuccess } from "../../shared/api/feedback";
+import { listWorkProjectSessions } from "../../shared/api/workProjects";
 import { getStoredAccessToken } from "../../shared/auth/session";
 import { mergeByKey } from "../../shared/lib/array";
 import type {
@@ -298,6 +299,8 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [sessions.length, sessionsPage, sessionsTotal, syncSessionSummaries]);
 
+  const sessionSummariesRef = useRef(sessionSummaries);
+  sessionSummariesRef.current = sessionSummaries;
   const refreshSessionsRef = useRef(refreshSessions);
   refreshSessionsRef.current = refreshSessions;
 
@@ -354,8 +357,14 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
     }
     if (events.some((event) => event.type === AGENT_EVENT_TYPE.RUN_STATE && !event.running)) {
       void refreshSessionsRef.current(true);
+      const projectId = sessionSummariesRef.current.get(sessionId)?.project_id;
+      if (projectId) {
+        listWorkProjectSessions(projectId, { page: 1, size: RESOURCE_PAGE_SIZE })
+          .then((response) => syncSessionSummaries(response.data?.items ?? []))
+          .catch(() => undefined);
+      }
     }
-  }, [applyStore]);
+  }, [applyStore, syncSessionSummaries]);
 
   const enqueueStreamEvent = useCallback((sessionId: string, event: AgentStreamEvent) => {
     const events = liveFrameEventsRef.current.get(sessionId);

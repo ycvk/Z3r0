@@ -27,6 +27,9 @@ from schema.work_project.workflow import WorkProjectWorkItemStatus
 from service.common.pagination import Page, paginate_statement
 from service.work_project.locking import lock_active_work_project
 
+OPERATOR_EVIDENCE_ACTOR = "operator"
+_LEAD_EVIDENCE_ACTORS = frozenset({DEFAULT_AGENT_CODE, OPERATOR_EVIDENCE_ACTOR})
+
 
 async def query_work_project_evidence(
     project_id: int,
@@ -77,9 +80,9 @@ async def create_work_project_evidence(
         if work_item is None or work_item.project_id != project_id:
             return None, "Work item not found"
         actor_code = created_by_agent_code.strip()
-        if actor_code != DEFAULT_AGENT_CODE and work_item.assignee_agent_code != actor_code:
+        if actor_code not in _LEAD_EVIDENCE_ACTORS and work_item.assignee_agent_code != actor_code:
             return None, "Evidence work item is assigned to another agent"
-        if actor_code != DEFAULT_AGENT_CODE and work_item.status not in {
+        if actor_code not in _LEAD_EVIDENCE_ACTORS and work_item.status not in {
             WorkProjectWorkItemStatus.ACTIVE,
             WorkProjectWorkItemStatus.BLOCKED,
         }:

@@ -1,5 +1,5 @@
 import { Input, Select, TabPane, Tabs, Tag } from "../../shared/ui/semi";
-import { Activity, Boxes, Bug, ClipboardList, FileCheck2, Gauge, Network, Route } from "lucide-react";
+import { Activity, ArrowLeftRight, Boxes, Bug, ClipboardList, FileCheck2, Gauge, KeyRound, Network, Route } from "lucide-react";
 import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
 import { showApiError } from "../../shared/api/feedback";
 import type {
@@ -73,10 +73,21 @@ import {
   WORK_PROJECT_WORK_LOG_KIND_LABEL,
 } from "../../shared/lib/labels";
 import { ProjectGraphCanvas } from "./ProjectGraphCanvas";
+import { ProjectCredentialsTab, ProjectTrafficTab } from "./ProjectWorkbenchPanels";
 import { WorkProjectMarkdown } from "./WorkProjectMarkdown";
 import { formatWorkProjectAsset } from "./workProjectView";
 
-export type ProjectRecordTab = "overview" | "workflow" | "graph" | "assets" | "findings" | "attack-paths" | "evidence" | "activity";
+export type ProjectRecordTab =
+  | "overview"
+  | "workflow"
+  | "graph"
+  | "assets"
+  | "findings"
+  | "attack-paths"
+  | "evidence"
+  | "traffic"
+  | "credentials"
+  | "activity";
 type Props = { projectId: number; initialTab?: ProjectRecordTab; className?: string };
 const EMPTY_GRAPH: WorkProjectGraphView = { assets: [], relations: [], finding_counts: {}, active_work_item_counts: {}, attack_path_counts: {}, is_truncated: false };
 
@@ -302,6 +313,19 @@ function ProjectRecordTabs({ projectId, initialTab = "overview", className }: Pr
         >
           <EvidenceList records={evidence.items} />
         </Paged>
+      </TabPane>
+      <TabPane tab={<TabLabel icon={<ArrowLeftRight size={14} />} text="Traffic" />} itemKey="traffic">
+        <ProjectTrafficTab
+          projectId={projectId}
+          enabled={activeTab === "traffic"}
+          onEvidenceCreated={() => {
+            setOverviewLoaded(false);
+            evidence.invalidate();
+          }}
+        />
+      </TabPane>
+      <TabPane tab={<TabLabel icon={<KeyRound size={14} />} text="Credentials" />} itemKey="credentials">
+        <ProjectCredentialsTab projectId={projectId} enabled={activeTab === "credentials"} />
       </TabPane>
       <TabPane tab={<TabLabel icon={<Activity size={14} />} text="Activity" />} itemKey="activity">
         <Paged state={activity} emptyIcon={<Activity size={42} />} emptyTitle="No workflow activity.">

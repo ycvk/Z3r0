@@ -241,6 +241,12 @@ export type QueryWorkProjectWorkItemsResponse = JsonResponse<paths["/api/work-pr
 export type QueryWorkProjectActivityParams = QueryParameters<paths["/api/work-projects/{id}/activity"]["get"]>;
 export type QueryWorkProjectActivityResponse = JsonResponse<paths["/api/work-projects/{id}/activity"]["get"]>;
 export type GetWorkProjectGraphResponse = JsonResponse<paths["/api/work-projects/{id}/graph"]["get"]>;
+export type QueryWorkProjectCredentialsParams = QueryParameters<paths["/api/work-projects/{id}/credentials"]["get"]>;
+export type QueryWorkProjectCredentialsResponse = JsonResponse<paths["/api/work-projects/{id}/credentials"]["get"]>;
+export type CreateWorkProjectCredentialResponse = JsonResponse<paths["/api/work-projects/{id}/credentials"]["post"]>;
+export type DeleteWorkProjectCredentialResponse = JsonResponse<paths["/api/work-projects/{id}/credentials/{credential_id}"]["delete"]>;
+export type CreateTrafficEvidenceRequest = JsonRequestBody<paths["/api/work-projects/{id}/traffic/{traffic_id}/evidence"]["post"]>;
+export type CreateTrafficEvidenceResponse = JsonResponse<paths["/api/work-projects/{id}/traffic/{traffic_id}/evidence"]["post"]>;
 
 export type AgentSessionSummary = components["schemas"]["AgentSessionSummarySchema"];
 export type SessionType = components["schemas"]["SessionType"];

@@ -1,5 +1,8 @@
-from pydantic import BaseModel, Field
+from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from schema.agent.credentials import SessionCredentialSchema
 from schema.common.responses import PaginatedResponse
 from schema.work_project.assets import WorkProjectAssetSchema
 from schema.work_project.evidence import WorkProjectEvidenceSchema
@@ -84,6 +87,30 @@ class QueryWorkProjectWorkItemsResponse(PaginatedResponse[WorkProjectWorkItemRec
 
 class QueryWorkProjectActivityResponse(PaginatedResponse[WorkProjectWorkLogSchema]):
     pass
+
+
+class QueryWorkProjectCredentialsResponse(PaginatedResponse[SessionCredentialSchema]):
+    pass
+
+
+class DeleteWorkProjectCredentialResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    deleted: bool
+
+
+class CreateTrafficEvidenceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    work_item_id: int = Field(gt=0)
+    primary_asset_id: int | None = Field(default=None, gt=0)
+    title: str = Field(default="", max_length=255)
+    note: str = Field(default="", max_length=2000)
+
+    @field_validator("title", "note", mode="before")
+    @classmethod
+    def _strip(cls, value: Any) -> Any:
+        return value.strip() if isinstance(value, str) else value
 
 
 class WorkProjectGraphViewSchema(BaseModel):
