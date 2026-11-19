@@ -13,6 +13,7 @@ from config import ROOT_PATH, get_config
 from core.agent.registry import AgentRegistry
 from core.delegation.subagents import start_subagent_runtime, stop_subagent_runtime
 from core.lightrag.runtime import start_lightrag, stop_lightrag
+from core.runtime.ports import RuntimePorts, install_runtime_ports
 from core.runtime.session import AgentSessionPool, get_agent_pool, install_agent_pool
 from core.sandbox.command_jobs import start_async_sandbox_runtime, stop_async_sandbox_commands
 from database import close_engine, init_engine, migrate_database
@@ -38,14 +39,17 @@ from router.system_user.users import router as system_user_router
 from router.work_project.projects import router as work_project_router
 from router.work_project.records import router as work_project_records_router
 from schema.system_user.users import SystemUserRole
+from service.agent import session_state
 from service.agent.recovery import recover_pending_sessions
 from service.agent.reports import start_report_cleanup_runtime, stop_report_cleanup_runtime
+from service.agent.runtime import resume_main_agent_session
 from service.flow.controller import start_flow_runtime, stop_flow_runtime
 from service.host.hosts import ensure_local_managed_host
 from service.knowledge.runtime import (
     start_knowledge_document_runtime,
     stop_knowledge_document_runtime,
 )
+from service.sandbox.commands import execute_sandbox_container_command
 from service.sandbox.control_proxy import close_control_proxy_http_client
 from service.sandbox.files import close_file_http_client
 from service.sandbox.novnc import close_novnc_http_client
@@ -60,6 +64,7 @@ from service.sandbox.traffic import (
     stop_sandbox_traffic_sync_runtime,
 )
 from service.system_user.users import create_system_user, query_system_user_by_username
+from service.work_project.context import activate_work_project_context
 from tools.catalog import AGENT_SPECS
 
 
@@ -107,8 +112,16 @@ async def _reset_agent_tool_bindings() -> None:
         set_agent_tool_binding_invalidator(None)
 
 
-def build_agent_pool() -> AgentSessionPool:
-    return AgentSessionPool(AgentRegistry(AGENT_SPECS))
+def install_agent_runtime() -> None:
+    """Give the agent runtime its tool catalog and the services it calls."""
+    set_tracing_disabled(True)
+    install_runtime_ports(RuntimePorts(
+        session_runs=session_state,
+        activate_turn_context=activate_work_project_context,
+        execute_sandbox_command=execute_sandbox_container_command,
+        resume_main_agent_session=resume_main_agent_session,
+    ))
+    install_agent_pool(AgentSessionPool(AgentRegistry(AGENT_SPECS)))
 
 
 async def _invalidate_current_agent_tool_bindings(container_id: int | None) -> None:
@@ -165,8 +178,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
             await start_knowledge_document_runtime()
             shutdown_steps.append(("knowledge document runtime", stop_knowledge_document_runtime))
 
-            set_tracing_disabled(True)
-            install_agent_pool(build_agent_pool())
+            install_agent_runtime()
             await start_async_sandbox_runtime()
             shutdown_steps.append(("sandbox command runtime", stop_async_sandbox_commands))
             await start_subagent_runtime()

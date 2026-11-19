@@ -26,7 +26,7 @@ from tools.credentials import list_credentials, save_credential
 from tools.flow import terminal
 from tools.sandbox import execute_sync_command
 from tools.traffic import get_traffic_detail, search_traffic
-from core.work_project.context import activate_work_project_context
+from service.work_project.context import activate_work_project_context
 from database import get_async_session
 from model.flow.flows import Flow
 from model.host.hosts import ManagedHost

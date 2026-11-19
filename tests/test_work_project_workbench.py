@@ -5,7 +5,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app import create_app
 from core.runtime.context import AgentRuntimeContext, AgentUserContext
-from core.work_project.context import activate_work_project_context
+from service.work_project.context import activate_work_project_context
 from database import get_async_session
 from model.host.hosts import ManagedHost
 from model.sandbox.containers import SandboxContainer

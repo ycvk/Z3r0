@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import docker
 
+from core.sandbox.errors import SandboxContainerCommandTimeoutError
 from database import get_async_session
 from logger import get_logger
 from model.host.hosts import ManagedHost
@@ -30,12 +31,6 @@ _COMMAND_WORKDIR = "/root"
 
 class _SandboxCommandCancelled(RuntimeError):
     pass
-
-
-class SandboxContainerCommandTimeoutError(TimeoutError):
-    def __init__(self, timeout_seconds: float) -> None:
-        self.timeout_seconds = timeout_seconds
-        super().__init__(f"Sandbox container command timed out after {_format_timeout_seconds(timeout_seconds)} seconds")
 
 
 class _RunningContainerCommand:
@@ -329,13 +324,6 @@ def _normalize_command_timeout(timeout_seconds: float) -> float:
     if normalized_timeout_seconds <= 0:
         raise ValueError("Sandbox container command timeout must be greater than 0 seconds")
     return normalized_timeout_seconds
-
-
-def _format_timeout_seconds(timeout_seconds: float) -> str:
-    value = float(timeout_seconds)
-    if value.is_integer():
-        return str(int(value))
-    return f"{value:.3f}".rstrip("0").rstrip(".")
 
 
 async def execute_sandbox_container_command(

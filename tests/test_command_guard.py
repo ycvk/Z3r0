@@ -4,7 +4,7 @@ import pytest
 
 from core.runtime.context import AgentRuntimeContext, AgentUserContext
 from core.sandbox import command_guard
-from core.work_project import context as wp_context
+from service.work_project import context as wp_context
 from schema.system_user.users import SystemUserRole
 
 

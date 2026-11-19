@@ -20,8 +20,8 @@ from core.conversation.formats import (
     format_context_summary,
 )
 from core.conversation.projection import ContextProjection, ProjectedItem, ProjectionCompaction
+from core.runtime.ports import runtime_ports
 from logger import get_logger
-from service.agent.session_state import record_session_usage
 from model.agent.context_compactions import AgentContextCompaction
 
 
@@ -390,7 +390,7 @@ async def _summarize_items(
             ),
             max_turns=1,
         )
-        await record_session_usage(
+        await runtime_ports().session_runs.record_session_usage(
             session_id,
             getattr(getattr(result, "context_wrapper", None), "usage", None),
         )

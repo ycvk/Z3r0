@@ -78,18 +78,6 @@ name = "Layers import downward only"
 type = "layers"
 # handler serves HTTP requests and tools serves agent tool calls; neither imports the other.
 layers = ["router", "handler | tools", "service", "core", "middleware", "model", "schema", "utils"]
-# Existing core -> service imports. Remove entries as the dependency is inverted; never add new ones.
-unmatched_ignore_imports_alerting = "error"
-ignore_imports = [
-    "core.conversation.compaction -> service.agent.session_state",
-    "core.delegation.subagents -> service.agent.session_state",
-    "core.runtime.session -> service.agent.session_state",
-    "core.sandbox.command_jobs -> service.sandbox.commands",
-    "core.work_project.context -> service.agent.credentials",
-    "core.work_project.context -> service.work_project.findings",
-    "core.work_project.context -> service.work_project.work_item_records",
-    "core.work_project.context -> service.work_project.workflow",
-]
 
 [tool.alembic]
 script_location = "%(here)s/migrations"

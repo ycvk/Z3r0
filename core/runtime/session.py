@@ -28,11 +28,11 @@ from core.runtime.input_items import build_turn_input_item, display_text_from_co
 from core.runtime.live_projection import LiveEventProjection
 from core.runtime.notification_dispatch import signal_target_notifications
 from core.runtime.partial_context import DeltaBuffer, discard_partial_stream, incomplete_segment_events, track_delta
+from core.runtime.ports import runtime_ports
 from core.runtime.streaming import StreamIdleTimeout, next_segment_scope
 from core.runtime.timeline import TimelineLogWriter, is_persistable, timeline_item_key
 from core.sandbox.command_jobs import cancel_sandbox_async_commands, cancel_session_async_sandbox_commands
 from core.task_runtime import InterruptSignal, TurnTrigger, iter_interruptible_events, replace_trigger, run_until_idle
-from core.work_project import activate_work_project_context
 from database import get_engine
 from logger import get_logger
 from schema.agent.events import (
@@ -45,13 +45,6 @@ from schema.agent.events import (
     UserMessageEvent,
 )
 from schema.agent.notifications import AgentNotificationSnapshot
-from service.agent.session_state import (
-    force_mark_session_stopped as _force_mark_session_stopped,
-    mark_session_running as _mark_session_running,
-    mark_session_stopped as _mark_session_stopped,
-    mark_sessions_stopped as _mark_sessions_stopped,
-    record_session_usage as _record_session_usage,
-)
 
 
 logger = get_logger(__name__)
@@ -127,7 +120,7 @@ class AgentSession:
                         "Stop running tasks before switching agent"
                     )
                 return await self._enqueue_user_message(content, agent_code, context)
-            await _mark_session_running(
+            await runtime_ports().session_runs.mark_session_running(
                 self.session_id,
                 agent_code=agent_code,
                 user_id=context.user.id,
@@ -195,7 +188,7 @@ class AgentSession:
                 session_id=self.session_id,
             ):
                 return False
-            await _mark_session_running(
+            await runtime_ports().session_runs.mark_session_running(
                 self.session_id,
                 agent_code=context.agent_code,
                 user_id=context.user.id,
@@ -233,7 +226,7 @@ class AgentSession:
             self.session_id,
             "Discarded by user interrupt.",
         )
-        await _mark_session_stopped(self.session_id)
+        await runtime_ports().session_runs.mark_session_stopped(self.session_id)
         event = await self._publish_idle_if_inactive()
         return [event] if event is not None else []
 
@@ -246,7 +239,7 @@ class AgentSession:
                 await task
             except asyncio.CancelledError:
                 pass
-            await _mark_session_stopped(self.session_id)
+            await runtime_ports().session_runs.mark_session_stopped(self.session_id)
             events.append(await self._publish(DoneEvent(created_at=datetime.now())))
         await cancel_session_subagents(self.session_id)
         await cancel_session_async_sandbox_commands(self.session_id)
@@ -254,7 +247,7 @@ class AgentSession:
             self.session_id,
             "Agent session tasks canceled by user.",
         )
-        await _force_mark_session_stopped(self.session_id)
+        await runtime_ports().session_runs.force_mark_session_stopped(self.session_id)
         events.append(self._publish_run_state(False))
         return events
 
@@ -328,7 +321,7 @@ class AgentSession:
             current_retrieval_text,
         )
         async with activate_lightrag_context(turn_context, retrieval_query):
-            async with activate_work_project_context(turn_context):
+            async with runtime_ports().activate_turn_context(turn_context):
                 return await self._execute_turn_with_context(
                     trigger=trigger,
                     turn_agent_code=turn_agent_code,
@@ -441,7 +434,7 @@ class AgentSession:
             logger.exception("Agent stream failed session=%s: %s", self.session_id, exc)
             stream_error = ErrorEvent(created_at=datetime.now(), agent_name=agent.name, message=str(exc))
         finally:
-            await _record_session_usage(
+            await runtime_ports().session_runs.record_session_usage(
                 self.session_id,
                 getattr(getattr(stream, "context_wrapper", None), "usage", None),
             )
@@ -551,7 +544,7 @@ class AgentSession:
                     self._active_agent_code = ""
                     self._active_agent_instance_id = ""
                 if not canceled and not relaunched:
-                    await _mark_session_stopped(self.session_id)
+                    await runtime_ports().session_runs.mark_session_stopped(self.session_id)
                     await self._publish_idle_if_inactive()
 
     async def _reconcile_driver(
@@ -753,7 +746,7 @@ class AgentSessionPool:
             session_ids = list(self._pool.keys())
             self._pool.clear()
         await asyncio.gather(*(entry.session.shutdown() for entry in entries), return_exceptions=True)
-        await _mark_sessions_stopped(session_ids)
+        await runtime_ports().session_runs.mark_sessions_stopped(session_ids)
         logger.debug("Agent pool stopped")
 
     async def get_or_create(self, session_id: str) -> AgentSession:
@@ -783,7 +776,7 @@ class AgentSessionPool:
         async with self._lock:
             entry = self._pool.pop(session_id, None)
         if entry is None:
-            await _force_mark_session_stopped(session_id)
+            await runtime_ports().session_runs.force_mark_session_stopped(session_id)
             return
         await entry.session.shutdown()
         logger.debug("Agent pool discarded session=%s", session_id)
@@ -838,7 +831,7 @@ class AgentSessionPool:
         entry = self._pool.get(session_id)
         if entry is not None and entry.session.is_running():
             return
-        await _mark_session_stopped(session_id)
+        await runtime_ports().session_runs.mark_session_stopped(session_id)
         if entry is not None:
             await entry.session._publish_idle_if_inactive()
 
@@ -852,7 +845,7 @@ class AgentSessionPool:
                 session_id,
                 "Agent session tasks canceled by user.",
             )
-            await _force_mark_session_stopped(session_id)
+            await runtime_ports().session_runs.force_mark_session_stopped(session_id)
             return []
         return await entry.session.cancel_all()
 

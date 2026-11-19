@@ -9,11 +9,12 @@ from dataclasses import dataclass
 from core.runtime import notifications as agent_notifications
 from core.runtime.context import AgentRuntimeContext
 from core.runtime.coordination import resume_target_agent_instance
+from core.runtime.ports import runtime_ports
 from core.sandbox import async_jobs as sandbox_async_jobs
 from core.sandbox.command_output import COMMAND_TIMEOUT_ERROR, excerpt_command, excerpt_text
+from core.sandbox.errors import SandboxContainerCommandTimeoutError
 from logger import get_logger
 from schema.sandbox.async_jobs import SandboxAsyncJobSnapshot
-from service.sandbox.commands import SandboxContainerCommandTimeoutError, execute_sandbox_container_command
 
 
 logger = get_logger(__name__)
@@ -164,7 +165,7 @@ async def _run_async_sandbox_command(
         return
 
     try:
-        result = await execute_sandbox_container_command(
+        result = await runtime_ports().execute_sandbox_command(
             id=context.sandbox_container_id,
             command=wrapped_command,
             timeout_seconds=timeout_seconds,
@@ -215,7 +216,7 @@ async def _run_async_sandbox_command(
 
 async def _stat_output_file(container_id: int, stat_command: str) -> tuple[int, int]:
     try:
-        result = await execute_sandbox_container_command(
+        result = await runtime_ports().execute_sandbox_command(
             id=container_id,
             command=stat_command,
             timeout_seconds=_OUTPUT_STAT_TIMEOUT_SECONDS,
@@ -281,7 +282,7 @@ async def _attach_output_excerpt(snapshot: SandboxAsyncJobSnapshot) -> None:
     if not snapshot.output_file or snapshot.sandbox_container_id is None:
         return
     try:
-        result = await execute_sandbox_container_command(
+        result = await runtime_ports().execute_sandbox_command(
             id=snapshot.sandbox_container_id,
             command=excerpt_command(snapshot.output_file),
             timeout_seconds=_OUTPUT_STAT_TIMEOUT_SECONDS,

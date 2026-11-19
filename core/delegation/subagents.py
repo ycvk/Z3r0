@@ -28,7 +28,6 @@ from core.runtime.context import (
 )
 from core.runtime.coordination import (
     publish_agent_event,
-    resume_main_agent_session,
     set_subagent_cancel_handlers,
     set_target_agent_resume_handler,
 )
@@ -36,12 +35,11 @@ from core.runtime.event_log import persist_subagent_event_unpooled
 from core.runtime.input_items import build_turn_input_item, retrieval_text_from_content, text_input_content
 from core.runtime.notification_dispatch import forget_target_notifications, is_main_agent_instance
 from core.runtime.partial_context import DeltaBuffer, discard_partial_stream, incomplete_segment_events, track_delta
+from core.runtime.ports import runtime_ports
 from core.runtime.streaming import StreamIdleTimeout, next_segment_scope
 from core.sandbox.command_jobs import cancel_agent_async_sandbox_commands
 from core.task_runtime import InterruptSignal, TurnTrigger, iter_interruptible_events, run_until_idle
-from core.work_project import activate_work_project_context
 from database import get_async_session, get_engine
-from service.agent.session_state import record_session_usage
 from logger import get_logger
 from model.work_project.workflow import WorkProjectWorkItem
 from schema.agent.events import (
@@ -63,7 +61,6 @@ from schema.agent.subordinates import (
     AgentSubordinateTaskToolResult,
 )
 from schema.work_project.workflow import WorkProjectWorkItemStatus
-from service.agent.session_state import mark_session_running
 
 
 logger = get_logger(__name__)
@@ -580,7 +577,7 @@ async def resume_target_instance(session_id: str, agent_instance_id: str) -> Non
     if not agent_instance_id:
         return
     if is_main_agent_instance(agent_instance_id):
-        await resume_main_agent_session(session_id)
+        await runtime_ports().resume_main_agent_session(session_id)
         return
     await resume_subagent_instance(agent_instance_id.removeprefix(SUBAGENT_INSTANCE_PREFIX))
 
@@ -673,7 +670,7 @@ def _subagent_run_turn(driver: _SubagentDriver) -> Callable[[TurnTrigger], Any]:
             current_retrieval_text,
         )
         async with activate_lightrag_context(context, retrieval_query):
-            async with activate_work_project_context(context):
+            async with runtime_ports().activate_turn_context(context):
                 user_input = [build_turn_input_item(trigger)]
                 if agent_config is not None:
                     await memory_session.compact_if_needed(agent_config=agent_config, incoming_items=user_input)
@@ -718,7 +715,7 @@ def _subagent_run_turn(driver: _SubagentDriver) -> Callable[[TurnTrigger], Any]:
                     await discard_partial_stream(stream, buffers, log_label="subagent")
                     raise
                 finally:
-                    await record_session_usage(
+                    await runtime_ports().session_runs.record_session_usage(
                         snapshot.session_id,
                         getattr(getattr(stream, "context_wrapper", None), "usage", None),
                     )
@@ -857,7 +854,7 @@ async def _mark_parent_session_running(
     context: AgentRuntimeContext,
 ) -> None:
     try:
-        await mark_session_running(
+        await runtime_ports().session_runs.mark_session_running(
             snapshot.session_id,
             agent_code=snapshot.parent_agent_code,
             user_id=context.user.id,

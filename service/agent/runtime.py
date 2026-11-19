@@ -3,7 +3,6 @@ import shlex
 
 from core.runtime import notifications as agent_notifications
 from core.runtime.context import AgentRuntimeContext, AgentUserContext, main_agent_instance_id
-from core.runtime.coordination import set_main_agent_resume_handler
 from core.runtime.input_items import display_text_from_content
 from core.runtime.session import AgentSessionAgentSwitchError, get_agent_pool
 from core.sandbox.command_guard import (
@@ -430,5 +429,3 @@ def _front_matter_from_lines(lines: list[str]) -> str | None:
             return "\n".join(lines[:index + 1]).strip()
     return None
 
-
-set_main_agent_resume_handler(resume_main_agent_session)

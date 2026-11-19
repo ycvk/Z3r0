@@ -5,7 +5,6 @@ from sqlmodel import select
 
 from core.agent.constants import DEFAULT_AGENT_CODE
 from core.runtime.context import AgentRuntimeContext
-from core.work_project import build_work_project_context
 from database import get_async_session
 from model.work_project.assets import WorkProjectAsset
 from model.work_project.graph import WorkProjectAttackPathStep
@@ -28,6 +27,7 @@ from schema.work_project.workflow import (
     WorkProjectWorkItemTargetUpdateRequest,
     WorkProjectWorkLogRequest,
 )
+from service.work_project.context import build_work_project_context
 from service.work_project.assets import merge_work_project_assets, query_work_project_assets, update_work_project_asset, upsert_work_project_asset
 from service.work_project.evidence import create_work_project_evidence, invalidate_work_project_evidence, query_work_project_evidence
 from service.work_project.findings import query_work_project_findings, save_work_project_finding as save_work_project_finding_service
