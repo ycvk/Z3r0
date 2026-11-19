@@ -1,6 +1,6 @@
 from middleware.system_user import AuthUser
-from schema.agent.credentials import CreateSessionCredentialRequest
 from schema.common.responses import CommonResponse
+from schema.credential.credentials import CreateSessionCredentialRequest
 from schema.work_project.assets import WorkProjectAssetKind, WorkProjectAssetScope
 from schema.work_project.evidence import WorkProjectEvidenceKind, WorkProjectEvidenceStatus
 from schema.work_project.findings import WorkProjectFindingSeverity, WorkProjectFindingVerification

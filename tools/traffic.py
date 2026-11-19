@@ -6,7 +6,7 @@ from agents import RunContextWrapper, function_tool
 
 from core.runtime.context import AgentRuntimeContext
 from schema.common.tool_results import ToolResultSchema, ToolResultStatusSchema, ToolResultTypeSchema
-from service.sandbox import traffic as traffic_service
+from service.traffic import entries as traffic_service
 
 
 def _traffic_result(status: ToolResultStatusSchema, output: str) -> str:

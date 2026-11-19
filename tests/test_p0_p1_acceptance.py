@@ -38,7 +38,7 @@ from schema.sandbox.containers import SandboxContainerStatus
 from schema.system_user.users import SystemUserRole
 from service.agent import sessions as agent_sessions
 from service.agent.session_state import record_session_usage
-from service.sandbox import traffic as traffic_service
+from service.traffic.runtime import sync_running_containers_traffic
 from tests.conftest import auth_headers
 
 
@@ -418,7 +418,7 @@ async def test_live_go_proxy_http_https_mitm_and_high_volume_sync(
                     proxied.get(f"http://127.0.0.1:{http_port}/scan/{i}")
                     for i in range(batch_start, min(batch_start + 200, 620))
                 ))
-                await traffic_service.sync_running_containers_traffic()
+                await sync_running_containers_traffic()
 
         # Verify Agent tools search_traffic + get_traffic_detail and REST API
         ctx = AgentRuntimeContext(

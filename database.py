@@ -16,11 +16,11 @@ from model.agent.message_meta import AgentMessageMeta
 from model.agent.event_log import AgentEventLog
 from model.agent.context_compactions import AgentContextCompaction
 from model.agent.sessions import AgentSessionMeta
-from model.agent.credentials import SessionCredential
-from model.sandbox.traffic import SandboxTrafficEntry
+from model.credential.credentials import SessionCredential
 from model.sandbox.containers import SandboxContainer
 from model.sandbox.images import SandboxImage
 from model.system_user.users import SystemUser
+from model.traffic.entries import SandboxTrafficEntry
 from model.work_project.assets import WorkProjectAsset
 from model.work_project.evidence import (
     WorkProjectAttackPathStepEvidence,

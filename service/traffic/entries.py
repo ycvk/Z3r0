@@ -13,15 +13,14 @@ from core.errors import NotFoundError
 from database import get_async_session
 from logger import get_logger
 from model.sandbox.containers import SandboxContainer
-from model.sandbox.traffic import SandboxTrafficEntry
+from model.traffic.entries import SandboxTrafficEntry
 from model.work_project.projects import WorkProject
-from schema.sandbox.containers import SandboxContainerStatus
-from schema.sandbox.traffic import (
+from schema.system_user.users import SystemUserRole
+from schema.traffic.entries import (
     IngestTrafficRequest,
     TrafficEntryDetailSchema,
     TrafficEntrySummarySchema,
 )
-from schema.system_user.users import SystemUserRole
 from service.common.access import (
     can_access_work_project,
     can_view_sandbox_container,
@@ -30,7 +29,7 @@ from service.common.access import (
 )
 from service.common.pagination import Page, paginate_statement
 from service.sandbox.control_proxy import (
-    _get_http_client,
+    control_proxy_http_client,
     resolve_sandbox_control_proxy_target,
     sandbox_control_proxy_token_headers,
 )
@@ -41,10 +40,7 @@ logger = get_logger(__name__)
 _MAX_BODY_CHARS = 262_144
 _PROXY_TRAFFIC_ATTEMPTS = 2
 _PROXY_TRAFFIC_RETRY_SECONDS = 0.25
-_TRAFFIC_SYNC_INTERVAL_SECONDS = 3.0
-_TRAFFIC_SYNC_BATCH_SIZE = 16
 
-_traffic_sync_task: asyncio.Task[None] | None = None
 _container_sync_locks: dict[int, asyncio.Lock] = {}
 
 
@@ -198,7 +194,7 @@ async def _request_proxy_traffic(
     last_error: Exception | None = None
     for attempt in range(_PROXY_TRAFFIC_ATTEMPTS):
         try:
-            response = await _get_http_client().request(
+            response = await control_proxy_http_client().request(
                 method,
                 url,
                 params=params,
@@ -318,70 +314,6 @@ async def sync_container_traffic(
             session.add_all(rows)
             await session.commit()
         return len(rows)
-
-
-async def sync_running_containers_traffic() -> None:
-    async with get_async_session() as session:
-        container_ids = list(
-            (
-                await session.exec(
-                    select(SandboxContainer.id).where(
-                        SandboxContainer.status == SandboxContainerStatus.RUNNING,
-                        SandboxContainer.control_proxy_host_port > 0,
-                        SandboxContainer.control_proxy_token != "",
-                    )
-                )
-            ).all()
-        )
-    valid_ids = [cid for cid in container_ids if cid is not None]
-    for offset in range(0, len(valid_ids), _TRAFFIC_SYNC_BATCH_SIZE):
-        batch = valid_ids[offset:offset + _TRAFFIC_SYNC_BATCH_SIZE]
-        await asyncio.gather(*(_sync_container_traffic_safely(cid) for cid in batch))
-
-
-async def _sync_container_traffic_safely(container_id: int) -> None:
-    try:
-        await sync_container_traffic(container_id)
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        logger.warning("background sandbox traffic sync failed: container=%s", container_id, exc_info=True)
-
-
-async def _traffic_sync_loop() -> None:
-    while True:
-        try:
-            await sync_running_containers_traffic()
-            await asyncio.sleep(_TRAFFIC_SYNC_INTERVAL_SECONDS)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("sandbox traffic sync loop iteration failed")
-            await asyncio.sleep(_TRAFFIC_SYNC_INTERVAL_SECONDS)
-
-
-async def start_sandbox_traffic_sync_runtime() -> None:
-    global _traffic_sync_task
-    if _traffic_sync_task is not None and not _traffic_sync_task.done():
-        return
-    _traffic_sync_task = asyncio.create_task(
-        _traffic_sync_loop(),
-        name="sandbox-traffic-sync-runtime",
-    )
-    logger.info("sandbox traffic sync runtime started")
-
-
-async def stop_sandbox_traffic_sync_runtime() -> None:
-    global _traffic_sync_task
-    task, _traffic_sync_task = _traffic_sync_task, None
-    if task is None or task.done():
-        return
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
-    logger.info("sandbox traffic sync runtime stopped")
 
 
 async def ingest_traffic(
@@ -530,6 +462,25 @@ async def get_traffic_entry(
     if row is None or not await can_view_traffic_entry(row, user_id, user_role):
         raise NotFoundError(f"Traffic entry {traffic_id} not found")
     return _to_detail(row)
+
+
+async def get_project_traffic_entry(project_id: int, traffic_id: int) -> SandboxTrafficEntry:
+    """The stored exchange when it is part of the project's traffic.
+
+    A project's traffic is what was captured for the project or on the sandbox container bound to it.
+    """
+    async with get_async_session() as session:
+        entry = await session.get(SandboxTrafficEntry, traffic_id)
+        project = await session.get(WorkProject, project_id)
+    if entry is None or project is None:
+        raise NotFoundError("Traffic entry not found")
+    captured_on_bound_container = (
+        project.sandbox_container_id is not None
+        and entry.sandbox_container_id == project.sandbox_container_id
+    )
+    if entry.project_id != project_id and not captured_on_bound_container:
+        raise NotFoundError("Traffic entry not found")
+    return entry
 
 
 async def clear_traffic(

@@ -22,6 +22,7 @@ All notable changes to Z3r0 are documented in this file.
 - Gathered the access rules for work projects, sandbox containers, agent sessions, Flows, and traffic in `service/common/access.py`. `router` and `handler` no longer import `model`.
 - Services raise `DomainError` subclasses (`ValidationError`, `AuthenticationError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, `UpstreamError`) mapped to HTTP status codes in `middleware/common/response.py`.
 - All resource endpoints addressed by id answer 404 when the resource is absent or the caller lacks access to it; 403 is reserved for role gates.
+- Moved the credentials vault into `credential` packages (`model`, `schema`, `service`) and captured traffic into `traffic` packages (`model`, `schema`, `service`, `handler`, `router`). An import contract keeps both services from importing the agent, Flow, and work project services.
 
 ### Fixed
 

@@ -16,8 +16,8 @@ from handler.work_project.records import (
 )
 from middleware.system_user import AuthUser, require_user
 from router.common.responses import BAD_REQUEST_RESPONSE, COMMON_ERROR_RESPONSES, not_found_response
-from schema.agent.credentials import CreateSessionCredentialRequest, SessionCredentialSchema
 from schema.common.responses import CommonResponse
+from schema.credential.credentials import CreateSessionCredentialRequest, SessionCredentialSchema
 from schema.work_project.assets import WorkProjectAssetKind, WorkProjectAssetScope
 from schema.work_project.evidence import WorkProjectEvidenceKind, WorkProjectEvidenceStatus
 from schema.work_project.findings import WorkProjectFindingSeverity, WorkProjectFindingVerification

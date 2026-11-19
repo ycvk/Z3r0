@@ -10,7 +10,7 @@ from sqlmodel import select
 from core.errors import NotFoundError
 from database import get_async_session
 from model.agent.subordinates import AgentSubordinateTask
-from model.sandbox.traffic import SandboxTrafficEntry
+from model.traffic.entries import SandboxTrafficEntry
 from model.work_project.assets import WorkProjectAsset
 from model.work_project.evidence import (
     WorkProjectAttackPathStepEvidence,
@@ -19,14 +19,13 @@ from model.work_project.evidence import (
 )
 from model.work_project.findings import WorkProjectFinding, WorkProjectFindingAsset
 from model.work_project.graph import WorkProjectAttackPath, WorkProjectAttackPathStep, WorkProjectRelation
-from model.work_project.projects import WorkProject
 from model.work_project.workflow import (
     WorkProjectWorkItem,
     WorkProjectWorkItemTarget,
     WorkProjectWorkLog,
 )
-from schema.agent.credentials import CreateSessionCredentialRequest, SessionCredentialSchema
 from schema.agent.subordinates import AgentSubordinateStatus
+from schema.credential.credentials import CreateSessionCredentialRequest, SessionCredentialSchema
 from schema.system_user.users import SystemUserRole
 from schema.work_project.assets import (
     WorkProjectAssetKind,
@@ -65,9 +64,10 @@ from schema.work_project.workflow import (
     WorkProjectWorkItemStatus,
     WorkProjectWorkLogSchema,
 )
-from service.agent import credentials as agent_credentials
 from service.common.access import can_access_work_project
 from service.common.pagination import Page, paginate_statement
+from service.credential import credentials as credential_service
+from service.traffic.entries import get_project_traffic_entry
 from service.work_project.assets import query_work_project_assets
 from service.work_project.evidence import (
     OPERATOR_EVIDENCE_ACTOR,
@@ -386,7 +386,7 @@ async def query_work_project_credentials_for_user(
     user_role: SystemUserRole,
 ) -> Page[SessionCredentialSchema]:
     await _require_accessible_project(project_id, user_id, user_role)
-    return await agent_credentials.query_project_credentials(
+    return await credential_service.query_project_credentials(
         project_id,
         page=page,
         size=size,
@@ -402,7 +402,7 @@ async def create_work_project_credential_for_user(
     user_role: SystemUserRole,
 ) -> SessionCredentialSchema:
     await _require_accessible_project(project_id, user_id, user_role)
-    return await agent_credentials.upsert_credential(
+    return await credential_service.upsert_credential(
         owner_id=user_id,
         session_id="",
         project_id=project_id,
@@ -422,7 +422,7 @@ async def delete_work_project_credential_for_user(
     user_role: SystemUserRole,
 ) -> None:
     await _require_accessible_project(project_id, user_id, user_role)
-    deleted = await agent_credentials.delete_credential(
+    deleted = await credential_service.delete_credential(
         credential_id,
         project_id=project_id,
     )
@@ -499,20 +499,7 @@ async def create_work_project_evidence_from_traffic_for_user(
     user_role: SystemUserRole,
 ) -> WorkProjectEvidenceRecordSchema:
     await _require_accessible_project(project_id, user_id, user_role)
-
-    async with get_async_session() as session:
-        project = await session.get(WorkProject, project_id)
-        if project is None:
-            raise NotFoundError("Work project not found")
-        entry = await session.get(SandboxTrafficEntry, traffic_id)
-        if entry is None:
-            raise NotFoundError("Traffic entry not found")
-        belongs_to_project = entry.project_id == project_id or (
-            project.sandbox_container_id is not None
-            and entry.sandbox_container_id == project.sandbox_container_id
-        )
-        if not belongs_to_project:
-            raise NotFoundError("Traffic entry not found")
+    entry = await get_project_traffic_entry(project_id, traffic_id)
 
     default_title = f"{entry.method} {entry.host}{entry.path} [{entry.status_code}]".strip()
     title = (request.title or default_title or f"HTTP exchange #{traffic_id}")[:255]

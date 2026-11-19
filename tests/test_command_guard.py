@@ -4,8 +4,9 @@ import pytest
 
 from core.runtime.context import AgentRuntimeContext, AgentUserContext
 from core.sandbox import command_guard
-from service.work_project import context as wp_context
 from schema.system_user.users import SystemUserRole
+from service.credential import context as credential_context
+from service.work_project import context as wp_context
 
 
 def test_agent_cannot_self_bypass_with_allow_guard_prefix() -> None:
@@ -48,7 +49,7 @@ async def test_credentials_context_error_surfaces(monkeypatch: pytest.MonkeyPatc
     async def boom(**_: object) -> list[object]:
         raise RuntimeError("credentials db broken")
 
-    monkeypatch.setattr(wp_context, "list_credentials_for_context", boom)
+    monkeypatch.setattr(credential_context, "list_credentials_for_context", boom)
     ctx = AgentRuntimeContext(
         session_id="sess-cred-err",
         user=AgentUserContext(id=1, username="u", email="u@test.local", role=SystemUserRole.USER),

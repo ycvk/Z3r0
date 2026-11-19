@@ -13,7 +13,7 @@ from logger import get_logger
 from middleware.system_user import AuthUser
 from model.agent.sessions import AgentSessionMeta
 from model.flow.flows import Flow, FlowSubtask
-from schema.agent.credentials import CreateSessionCredentialRequest, SessionCredentialSchema
+from schema.credential.credentials import CreateSessionCredentialRequest, SessionCredentialSchema
 from schema.flow.flows import (
     FLOW_RECOVERABLE_STATUSES,
     FLOW_TERMINAL_STATUSES,
@@ -27,12 +27,12 @@ from schema.flow.flows import (
 )
 from schema.sandbox.containers import SandboxContainerStatus
 from schema.agent.sessions import SessionType
-from service.agent import credentials as agent_credentials
 from service.agent import reports as agent_reports
 from service.agent import runtime as agent_runtime
 from service.agent import sessions as agent_sessions
 from service.common.access import can_access_flow, can_access_work_project, can_manage_sandbox_container, flow_scope
 from service.common.pagination import Page, paginate_statement
+from service.credential import credentials as credential_service
 from service.flow.locking import lock_flow_by_public_id
 from service.sandbox.records import load_sandbox_container_record
 
@@ -128,7 +128,7 @@ async def _load_subtasks(flow_id: int) -> list[FlowSubtask]:
 async def _schema_for(flow: Flow) -> FlowSchema:
     subtasks = await _load_subtasks(flow.id or 0) if flow.id else []
     meta = await agent_sessions.get_session_meta(flow.session_id)
-    creds = await agent_credentials.list_credentials_for_context(
+    creds = await credential_service.list_credentials_for_context(
         session_id=flow.session_id,
         project_id=flow.project_id,
     )
@@ -277,7 +277,7 @@ async def add_flow_credential(
     flow = await load_flow_row(public_id)
     if flow is None or not can_access_flow(flow, user.id, user.role):
         raise NotFoundError("flow not found")
-    await agent_credentials.upsert_credential(
+    await credential_service.upsert_credential(
         owner_id=user.id,
         session_id=flow.session_id,
         project_id=flow.project_id,
@@ -298,7 +298,7 @@ async def remove_flow_credential(
     flow = await load_flow_row(public_id)
     if flow is None or not can_access_flow(flow, user.id, user.role):
         raise NotFoundError("flow not found")
-    deleted = await agent_credentials.delete_credential(
+    deleted = await credential_service.delete_credential(
         credential_id,
         session_id=flow.session_id,
         project_id=flow.project_id,

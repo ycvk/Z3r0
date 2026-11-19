@@ -6,7 +6,7 @@ from agents import RunContextWrapper, function_tool
 
 from core.runtime.context import AgentRuntimeContext
 from schema.common.tool_results import ToolResultSchema, ToolResultStatusSchema, ToolResultTypeSchema
-from service.agent import credentials as credential_service
+from service.credential import credentials as credential_service
 
 
 def _cred_result(status: ToolResultStatusSchema, output: str) -> str:

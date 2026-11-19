@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Path, Query
 
-from handler.sandbox.traffic import (
+from handler.traffic.entries import (
     clear_traffic_handler,
     get_traffic_entry_handler,
     ingest_traffic_handler,
@@ -9,7 +9,7 @@ from handler.sandbox.traffic import (
 from middleware.system_user import AuthUser, require_user
 from router.common.responses import BAD_REQUEST_RESPONSE, COMMON_ERROR_RESPONSES, not_found_response
 from schema.common.responses import CommonResponse
-from schema.sandbox.traffic import (
+from schema.traffic.entries import (
     ClearTrafficResponse,
     IngestTrafficRequest,
     IngestTrafficResponse,

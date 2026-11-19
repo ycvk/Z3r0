@@ -4,7 +4,7 @@ from enum import StrEnum
 from pydantic import BaseModel, Field, field_validator
 
 from schema.common.responses import PaginatedResponse
-from schema.agent.credentials import SessionCredentialSchema
+from schema.credential.credentials import SessionCredentialSchema
 
 
 class FlowStatus(StrEnum):

@@ -35,9 +35,9 @@ from router.host.hosts import router as host_router
 from router.knowledge.resources import router as knowledge_router
 from router.sandbox.containers import router as sandbox_container_router
 from router.sandbox.images import router as sandbox_image_router
-from router.sandbox.traffic import router as sandbox_traffic_router
 from router.system_config.config import router as system_config_router
 from router.system_user.users import router as system_user_router
+from router.traffic.entries import router as traffic_router
 from router.work_project.projects import router as work_project_router
 from router.work_project.records import router as work_project_records_router
 from schema.system_user.users import SystemUserRole
@@ -61,11 +61,11 @@ from service.sandbox.status import (
     start_sandbox_container_status_monitor,
     stop_sandbox_container_status_monitor,
 )
-from service.sandbox.traffic import (
+from service.system_user.users import create_system_user, query_system_user_by_username
+from service.traffic.runtime import (
     start_sandbox_traffic_sync_runtime,
     stop_sandbox_traffic_sync_runtime,
 )
-from service.system_user.users import create_system_user, query_system_user_by_username
 from service.work_project.context import activate_work_project_context
 from tools.catalog import AGENT_SPECS
 
@@ -231,7 +231,7 @@ def create_app() -> FastAPI:
     app.include_router(sandbox_image_router, prefix=API_PREFIX)
     app.include_router(sandbox_container_router, prefix=API_PREFIX)
     app.include_router(work_project_router, prefix=API_PREFIX)
-    app.include_router(sandbox_traffic_router, prefix=API_PREFIX)
+    app.include_router(traffic_router, prefix=API_PREFIX)
     app.include_router(work_project_records_router, prefix=API_PREFIX)
     app.include_router(knowledge_router, prefix=API_PREFIX)
     app.include_router(agent_router, prefix=API_PREFIX)

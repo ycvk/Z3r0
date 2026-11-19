@@ -68,7 +68,7 @@ def sandbox_control_proxy_token_headers(target: SandboxControlProxyTarget) -> di
     return {"X-Sandbox-Token": target.token}
 
 
-def _get_http_client() -> httpx.AsyncClient:
+def control_proxy_http_client() -> httpx.AsyncClient:
     global _http_client
     if _http_client is None:
         _http_client = httpx.AsyncClient(timeout=httpx.Timeout(10.0), trust_env=False)
@@ -104,7 +104,7 @@ async def wait_for_control_proxy_ready(target: SandboxControlProxyTarget) -> Non
     deadline = loop.time() + _CONTROL_PROXY_READY_TIMEOUT_SECONDS
     while True:
         try:
-            response = await _get_http_client().get(
+            response = await control_proxy_http_client().get(
                 f"{target.base_url}/healthz",
                 headers=sandbox_control_proxy_token_headers(target),
                 timeout=2.0,
@@ -176,7 +176,7 @@ async def apply_egress_environment(target: SandboxControlProxyTarget, environmen
     last_error: Exception | None = None
     for attempt in range(_EGRESS_APPLY_ATTEMPTS):
         try:
-            response = await _get_http_client().post(
+            response = await control_proxy_http_client().post(
                 f"{target.base_url}/egress",
                 json=payload,
                 headers=sandbox_control_proxy_token_headers(target),

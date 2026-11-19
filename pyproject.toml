@@ -86,6 +86,13 @@ source_modules = ["router", "handler"]
 forbidden_modules = ["model"]
 allow_indirect_imports = true
 
+[[tool.importlinter.contracts]]
+name = "Credential and traffic services do not import the workflows that use them"
+type = "forbidden"
+source_modules = ["service.credential", "service.traffic"]
+forbidden_modules = ["service.agent", "service.flow", "service.work_project"]
+allow_indirect_imports = true
+
 [tool.alembic]
 script_location = "%(here)s/migrations"
 prepend_sys_path = ["."]

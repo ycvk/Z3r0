@@ -10,3 +10,4 @@
 - [ADR-0002 Backend layer direction and guardrails](adr/ADR-0002-backend-layer-direction-and-guardrails.md) — adr — 2026-11-19
 - [ADR-0003 Access decisions live in one module](adr/ADR-0003-access-decisions-in-one-module.md) — adr — 2026-11-19
 - [ADR-0004 Domain errors and single-point HTTP mapping](adr/ADR-0004-domain-errors-and-http-mapping.md) — adr — 2026-11-19
+- [ADR-0005 Credentials and captured traffic are their own domains](adr/ADR-0005-credentials-and-traffic-are-their-own-domains.md) — adr — 2026-11-19

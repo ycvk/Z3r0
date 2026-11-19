@@ -14,7 +14,7 @@ from database import get_async_session
 from model.agent.sessions import AgentSessionMeta
 from model.flow.flows import Flow
 from model.sandbox.containers import SandboxContainer
-from model.sandbox.traffic import SandboxTrafficEntry
+from model.traffic.entries import SandboxTrafficEntry
 from model.work_project.projects import WorkProject, WorkProjectOwner
 from schema.agent.sessions import SessionType
 from schema.system_user.users import SystemUserRole

@@ -14,7 +14,7 @@ from handler.flow.flows import (
 from middleware.system_user import AuthUser, require_user
 from router.common.responses import BAD_REQUEST_RESPONSE, COMMON_ERROR_RESPONSES, not_found_response
 from schema.common.responses import CommonResponse
-from schema.agent.credentials import CreateSessionCredentialRequest
+from schema.credential.credentials import CreateSessionCredentialRequest
 from schema.flow.flows import (
     CreateFlowRequest,
     FlowInputRequest,

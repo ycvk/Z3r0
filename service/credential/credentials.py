@@ -7,9 +7,9 @@ from sqlmodel import col, select
 
 from core.errors import ValidationError
 from database import get_async_session
-from model.agent.credentials import SessionCredential
+from model.credential.credentials import SessionCredential
 from model.agent.sessions import AgentSessionMeta
-from schema.agent.credentials import SessionCredentialSchema
+from schema.credential.credentials import SessionCredentialSchema
 from service.common.pagination import Page, paginate_statement
 
 

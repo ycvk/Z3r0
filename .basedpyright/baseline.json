@@ -1616,16 +1616,6 @@
                 }
             }
         ],
-        "./model/agent/credentials.py": [
-            {
-                "code": "reportAssignmentType",
-                "range": {
-                    "startColumn": 20,
-                    "endColumn": 41,
-                    "lineCount": 1
-                }
-            }
-        ],
         "./model/agent/event_log.py": [
             {
                 "code": "reportAssignmentType",
@@ -1672,6 +1662,16 @@
                 "range": {
                     "startColumn": 20,
                     "endColumn": 40,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./model/credential/credentials.py": [
+            {
+                "code": "reportAssignmentType",
+                "range": {
+                    "startColumn": 20,
+                    "endColumn": 41,
                     "lineCount": 1
                 }
             }
@@ -1744,22 +1744,22 @@
                 }
             }
         ],
-        "./model/sandbox/traffic.py": [
-            {
-                "code": "reportAssignmentType",
-                "range": {
-                    "startColumn": 20,
-                    "endColumn": 45,
-                    "lineCount": 1
-                }
-            }
-        ],
         "./model/system_user/users.py": [
             {
                 "code": "reportAssignmentType",
                 "range": {
                     "startColumn": 20,
                     "endColumn": 34,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./model/traffic/entries.py": [
+            {
+                "code": "reportAssignmentType",
+                "range": {
+                    "startColumn": 20,
+                    "endColumn": 45,
                     "lineCount": 1
                 }
             }
@@ -2122,24 +2122,6 @@
                 }
             }
         ],
-        "./service/agent/credentials.py": [
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 8,
-                    "endColumn": 50,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 73,
-                    "endColumn": 115,
-                    "lineCount": 1
-                }
-            }
-        ],
         "./service/agent/recovery.py": [
             {
                 "code": "reportArgumentType",
@@ -2240,6 +2222,24 @@
                 "range": {
                     "startColumn": 19,
                     "endColumn": 27,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./service/credential/credentials.py": [
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 50,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 73,
+                    "endColumn": 115,
                     "lineCount": 1
                 }
             }
@@ -2732,64 +2732,6 @@
                 }
             }
         ],
-        "./service/sandbox/traffic.py": [
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 20,
-                    "endColumn": 64,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 20,
-                    "endColumn": 90,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 26,
-                    "endColumn": 90,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 20,
-                    "endColumn": 64,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 20,
-                    "endColumn": 90,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 30,
-                    "endColumn": 74,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportAttributeAccessIssue",
-                "range": {
-                    "startColumn": 22,
-                    "endColumn": 30,
-                    "lineCount": 1
-                }
-            }
-        ],
         "./service/system_user/users.py": [
             {
                 "code": "reportAttributeAccessIssue",
@@ -2940,6 +2882,64 @@
                 "range": {
                     "startColumn": 19,
                     "endColumn": 64,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./service/traffic/entries.py": [
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 20,
+                    "endColumn": 64,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 20,
+                    "endColumn": 90,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 26,
+                    "endColumn": 90,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 20,
+                    "endColumn": 64,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 20,
+                    "endColumn": 90,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 30,
+                    "endColumn": 74,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAttributeAccessIssue",
+                "range": {
+                    "startColumn": 22,
+                    "endColumn": 30,
                     "lineCount": 1
                 }
             }

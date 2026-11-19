@@ -1,8 +1,8 @@
 from fastapi.responses import FileResponse
 
 from middleware.system_user import AuthUser
-from schema.agent.credentials import CreateSessionCredentialRequest
 from schema.common.responses import CommonResponse
+from schema.credential.credentials import CreateSessionCredentialRequest
 from schema.flow.flows import CreateFlowRequest, FlowInputRequest, ListFlowsResponse
 from service.agent import reports as agent_reports
 from service.common.pagination import paginated_payload

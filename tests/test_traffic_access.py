@@ -12,12 +12,12 @@ from database import get_async_session
 from model.host.hosts import ManagedHost
 from model.sandbox.containers import SandboxContainer
 from model.sandbox.images import SandboxImage
-from model.sandbox.traffic import SandboxTrafficEntry
+from model.traffic.entries import SandboxTrafficEntry
 from model.system_user.users import SystemUser
 from model.work_project.projects import WorkProject, WorkProjectOwner
 from schema.sandbox.containers import SandboxContainerStatus
 from schema.system_user.users import SystemUserRole
-from service.sandbox import traffic as traffic_service
+from service.traffic import entries as traffic_service
 from tests.conftest import auth_headers
 
 

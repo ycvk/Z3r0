@@ -1,13 +1,13 @@
 from middleware.system_user import AuthUser
 from schema.common.responses import CommonResponse
-from schema.sandbox.traffic import (
+from schema.traffic.entries import (
     ClearTrafficResponse,
     IngestTrafficRequest,
     IngestTrafficResponse,
     ListTrafficResponse,
 )
 from service.common.pagination import paginated_payload
-from service.sandbox.traffic import (
+from service.traffic.entries import (
     clear_traffic,
     get_traffic_entry,
     ingest_traffic,

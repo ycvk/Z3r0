@@ -15,7 +15,7 @@ from model.flow.flows import Flow
 from model.host.hosts import ManagedHost
 from model.sandbox.containers import SandboxContainer
 from model.sandbox.images import SandboxImage
-from model.sandbox.traffic import SandboxTrafficEntry
+from model.traffic.entries import SandboxTrafficEntry
 from model.system_user.users import SystemUser
 from model.agent.sessions import AgentSessionMeta
 from model.work_project.projects import WorkProject, WorkProjectOwner

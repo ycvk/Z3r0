@@ -10,7 +10,7 @@ from database import get_async_session
 from model.host.hosts import ManagedHost
 from model.sandbox.containers import SandboxContainer
 from model.sandbox.images import SandboxImage
-from model.sandbox.traffic import SandboxTrafficEntry
+from model.traffic.entries import SandboxTrafficEntry
 from model.system_user.users import SystemUser
 from model.work_project.assets import WorkProjectAsset
 from model.work_project.projects import WorkProject, WorkProjectOwner

@@ -2,8 +2,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from schema.agent.credentials import SessionCredentialSchema
 from schema.common.responses import PaginatedResponse
+from schema.credential.credentials import SessionCredentialSchema
 from schema.work_project.assets import WorkProjectAssetSchema
 from schema.work_project.evidence import WorkProjectEvidenceSchema
 from schema.work_project.findings import WorkProjectFindingAssetLinkSchema, WorkProjectFindingSchema
