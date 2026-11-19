@@ -9,12 +9,12 @@ from pydantic import BaseModel, Field
 from core.flow.barriers import FlowBarrier, set_barrier
 from core.runtime.context import AgentRuntimeContext
 from core.sandbox import command_output
+from core.sandbox import async_jobs as sandbox_async_jobs
 from core.sandbox.command_guard import check_command_guard
 from core.sandbox.command_jobs import start_async_sandbox_command
 from core.work_project import validate_specialist_execution_context
 from schema.flow.flows import MAX_FLOW_SUBTASKS
 from schema.sandbox.async_jobs import SandboxAsyncJobStatus
-from service.sandbox import async_jobs as sandbox_async_jobs
 
 
 _ASYNC_COMMAND_CONCURRENCY_LIMIT = 3

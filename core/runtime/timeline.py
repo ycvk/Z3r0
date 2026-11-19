@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TypeAlias
 
+from core.runtime.event_log import upsert_timeline_events
 from logger import get_logger
 from schema.agent.events import AgentEventSchema
-from service.agent.event_log import upsert_timeline_events
 
 
 logger = get_logger(__name__)

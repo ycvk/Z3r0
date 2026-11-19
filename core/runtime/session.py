@@ -16,12 +16,14 @@ from core.conversation.context_budget import build_context_run_config
 from core.conversation.retrieval import build_conversation_retrieval_query
 from core.conversation.store import Z3r0Session
 from core.lightrag.runtime import activate_lightrag_context
+from core.runtime import notifications as agent_notifications
 from core.runtime.context import AgentRuntimeContext, main_agent_instance_id
 from core.runtime.coordination import (
     cancel_sandbox_subagents,
     cancel_session_subagents,
     set_agent_event_publisher,
 )
+from core.runtime.event_log import load_timeline_head
 from core.runtime.input_items import build_turn_input_item, display_text_from_content, retrieval_text_from_content
 from core.runtime.live_projection import LiveEventProjection
 from core.runtime.notification_dispatch import signal_target_notifications
@@ -43,8 +45,6 @@ from schema.agent.events import (
     UserMessageEvent,
 )
 from schema.agent.notifications import AgentNotificationSnapshot
-from service.agent import notifications as agent_notifications
-from service.agent.event_log import load_timeline_head
 from service.agent.session_state import (
     force_mark_session_stopped as _force_mark_session_stopped,
     mark_session_running as _mark_session_running,

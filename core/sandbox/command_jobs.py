@@ -6,12 +6,13 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from core.runtime import notifications as agent_notifications
 from core.runtime.context import AgentRuntimeContext
 from core.runtime.coordination import resume_target_agent_instance
+from core.sandbox import async_jobs as sandbox_async_jobs
 from core.sandbox.command_output import COMMAND_TIMEOUT_ERROR, excerpt_command, excerpt_text
 from logger import get_logger
 from schema.sandbox.async_jobs import SandboxAsyncJobSnapshot
-from service.sandbox import async_jobs as sandbox_async_jobs
 from service.sandbox.commands import SandboxContainerCommandTimeoutError, execute_sandbox_container_command
 
 
@@ -293,7 +294,6 @@ async def _attach_output_excerpt(snapshot: SandboxAsyncJobSnapshot) -> None:
     excerpt, truncated = excerpt_text(result.output)
     if not excerpt:
         return
-    from service.agent import notifications as agent_notifications
     await agent_notifications.merge_payload_by_run_id(
         snapshot.run_id,
         {"output_excerpt": excerpt, "output_truncated": truncated},

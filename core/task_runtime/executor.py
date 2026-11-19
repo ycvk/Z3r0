@@ -13,13 +13,13 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from core.delegation.notifications import notification_prompt
+from core.runtime import notifications as agent_notifications
 from core.runtime.input_items import text_input_content
 from core.task_runtime.interrupt import InterruptSignal
 from core.task_runtime.trigger import TurnTrigger
 from logger import get_logger
 from schema.agent.events import AgentImageInputPart, AgentInputPart, AgentTextInputPart
 from schema.agent.notifications import AgentNotificationSnapshot
-from service.agent import notifications as agent_notifications
 
 logger = get_logger(__name__)
 

@@ -7,6 +7,7 @@ from agents import RunContextWrapper, function_tool
 
 from core.runtime.context import AgentRuntimeContext
 from core.work_project import validate_specialist_execution_context
+from core.sandbox import async_jobs as sandbox_async_jobs
 from core.sandbox import command_output
 from core.sandbox.command_guard import check_command_guard
 from core.sandbox.command_jobs import cancel_async_sandbox_command, start_async_sandbox_command
@@ -14,7 +15,6 @@ from core.sandbox.command_output import COMMAND_TIMEOUT_ERROR
 from core.sandbox.constants import SANDBOX_SKILLS_DIR
 from schema.sandbox.async_jobs import SandboxAsyncJobStatus
 from schema.common.tool_results import ToolResultSchema, ToolResultStatusSchema, ToolResultTypeSchema
-from service.sandbox import async_jobs as sandbox_async_jobs
 from service.sandbox.commands import SandboxContainerCommandTimeoutError, execute_sandbox_container_command
 from utils.markdown import markdown_body_without_front_matter
 

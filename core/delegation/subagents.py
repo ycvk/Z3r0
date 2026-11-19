@@ -18,7 +18,9 @@ from core.conversation.items import extract_message_text
 from core.conversation.context_budget import build_context_run_config
 from core.conversation.retrieval import build_conversation_retrieval_query
 from core.conversation.store import Z3r0Session, fetch_stored_items
+from core.delegation import subordinates as agent_subordinates
 from core.lightrag.runtime import activate_lightrag_context
+from core.runtime import notifications as agent_notifications
 from core.runtime.context import (
     SUBAGENT_INSTANCE_PREFIX,
     AgentRuntimeContext,
@@ -30,6 +32,7 @@ from core.runtime.coordination import (
     set_subagent_cancel_handlers,
     set_target_agent_resume_handler,
 )
+from core.runtime.event_log import persist_subagent_event_unpooled
 from core.runtime.input_items import build_turn_input_item, retrieval_text_from_content, text_input_content
 from core.runtime.notification_dispatch import forget_target_notifications, is_main_agent_instance
 from core.runtime.partial_context import DeltaBuffer, discard_partial_stream, incomplete_segment_events, track_delta
@@ -60,9 +63,6 @@ from schema.agent.subordinates import (
     AgentSubordinateTaskToolResult,
 )
 from schema.work_project.workflow import WorkProjectWorkItemStatus
-from service.agent import notifications as agent_notifications
-from service.agent import subordinates as agent_subordinates
-from service.agent.event_log import persist_subagent_event_unpooled
 from service.agent.session_state import mark_session_running
 
 

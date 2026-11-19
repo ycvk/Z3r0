@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from sqlmodel import select, update
 
+from core.runtime import notifications as agent_notifications
 from database import get_async_session
 from logger import get_logger
 from model.agent.subordinates import AgentSubordinateTask
@@ -12,7 +13,6 @@ from schema.agent.subordinates import (
     AgentSubordinateTaskSnapshot,
 )
 from schema.system_user.users import SystemUserRole
-from service.agent import notifications as agent_notifications
 
 
 logger = get_logger(__name__)

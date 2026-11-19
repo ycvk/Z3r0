@@ -4,10 +4,10 @@ from typing import Any
 from sqlalchemy import update
 from sqlmodel import select
 
+from core.runtime import notifications as agent_notifications
 from database import get_async_session
 from model.agent.sessions import AgentSessionMeta
 from model.system_user.users import SystemUser
-from service.agent import notifications as agent_notifications
 from service.system_user.locking import lock_system_user_lifecycle
 
 

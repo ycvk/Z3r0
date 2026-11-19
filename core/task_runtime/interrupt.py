@@ -12,6 +12,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
+from core.runtime import notifications as agent_notifications
 from core.runtime.notification_dispatch import (
     target_notification_version,
     wait_for_target_notifications,
@@ -19,7 +20,6 @@ from core.runtime.notification_dispatch import (
 from core.runtime.streaming import iter_normalized_stream_events
 from logger import get_logger
 from schema.agent.events import AgentEventSchema, ToolCallEvent, ToolResultEvent
-from service.agent import notifications as agent_notifications
 
 
 logger = get_logger(__name__)

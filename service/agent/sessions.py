@@ -8,6 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from core.agent.constants import DEFAULT_AGENT_CODE
 from core.runtime.coordination import cancel_session_subagents
+from core.runtime.event_log import fetch_timeline_page
 from core.runtime.session import get_agent_pool, get_agent_registry
 from core.sandbox.command_guard import clear_session_guard
 from core.sandbox.command_jobs import cancel_session_async_sandbox_commands
@@ -19,7 +20,6 @@ from model.work_project.projects import WorkProject, WorkProjectOwner
 from schema.agent.events import AgentContentEventSchema
 from schema.agent.sessions import AgentSessionSummarySchema, SessionType
 from schema.system_user.users import SystemUserRole
-from service.agent.event_log import fetch_timeline_page
 from service.agent.session_state import get_session_meta, mark_sessions_stopped
 from service.common.pagination import Page, paginate_statement
 from service.system_user.locking import lock_system_user_lifecycle

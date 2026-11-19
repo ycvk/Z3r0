@@ -1,6 +1,7 @@
 import asyncio
 import shlex
 
+from core.runtime import notifications as agent_notifications
 from core.runtime.context import AgentRuntimeContext, AgentUserContext, main_agent_instance_id
 from core.runtime.coordination import set_main_agent_resume_handler
 from core.runtime.input_items import display_text_from_content
@@ -18,7 +19,6 @@ from model.agent.sessions import AgentSessionMeta
 from schema.agent.events import AgentEventSchema, AgentInputPart
 from schema.agent.sessions import AgentSessionSummarySchema, SessionType
 from service.agent import sessions as agent_sessions
-from service.agent import notifications as agent_notifications
 from service.agent.session_state import get_session_meta, has_outstanding_session_work
 from service.sandbox.commands import execute_sandbox_container_command
 from service.sandbox.status import (

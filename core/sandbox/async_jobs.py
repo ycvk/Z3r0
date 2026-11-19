@@ -3,12 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from sqlmodel import select, update
 
+from core.runtime import notifications as agent_notifications
 from database import get_async_session
 from logger import get_logger
 from model.sandbox.async_jobs import SandboxAsyncJob
 from schema.agent.notifications import AgentNotificationKind
 from schema.sandbox.async_jobs import SandboxAsyncJobSnapshot, SandboxAsyncJobStatus
-from service.agent import notifications as agent_notifications
 
 
 logger = get_logger(__name__)
