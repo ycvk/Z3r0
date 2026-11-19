@@ -2,7 +2,7 @@
 
 All notable changes to Z3r0 are documented in this file.
 
-## [Unreleased]
+## [0.4.0] - 2026-11-20
 
 ### Added
 
