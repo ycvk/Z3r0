@@ -22,10 +22,10 @@ from config import ROOT_PATH
 from core.flow.barriers import pop_barrier
 from core.runtime.context import AgentRuntimeContext, AgentUserContext
 from core.sandbox import command_guard
-from core.tools.credentials import list_credentials, save_credential
-from core.tools.flow import terminal
-from core.tools.sandbox import execute_sync_command
-from core.tools.traffic import get_traffic_detail, search_traffic
+from tools.credentials import list_credentials, save_credential
+from tools.flow import terminal
+from tools.sandbox import execute_sync_command
+from tools.traffic import get_traffic_detail, search_traffic
 from core.work_project.context import activate_work_project_context
 from database import get_async_session
 from model.flow.flows import Flow
@@ -220,9 +220,9 @@ async def test_command_guard_flow_and_playground_tools_acceptance(
         executed.append(command)
         return SimpleNamespace(output="0 0\n", exit_code=0)
 
-    monkeypatch.setattr("core.tools.flow.start_async_sandbox_command", fake_start_async_cmd)
-    monkeypatch.setattr("core.tools.flow.sandbox_async_jobs.count_running_async_jobs_for_agent", fake_count_running)
-    monkeypatch.setattr("core.tools.sandbox.execute_sandbox_container_command", fake_exec_sync)
+    monkeypatch.setattr("tools.flow.start_async_sandbox_command", fake_start_async_cmd)
+    monkeypatch.setattr("tools.flow.sandbox_async_jobs.count_running_async_jobs_for_agent", fake_count_running)
+    monkeypatch.setattr("tools.sandbox.execute_sandbox_container_command", fake_exec_sync)
 
     ctx = AgentRuntimeContext(
         session_id="sess-guard-e2e",

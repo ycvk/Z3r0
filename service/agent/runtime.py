@@ -11,7 +11,7 @@ from core.sandbox.command_guard import (
     has_pending_command,
     is_guard_approval_reply,
 )
-from core.tools.sandbox import SANDBOX_SKILLS_DIR
+from core.sandbox.constants import SANDBOX_SKILLS_DIR
 from logger import get_logger
 from middleware.system_user import AuthUser
 from model.agent.sessions import AgentSessionMeta

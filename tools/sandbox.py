@@ -11,6 +11,7 @@ from core.sandbox import command_output
 from core.sandbox.command_guard import check_command_guard
 from core.sandbox.command_jobs import cancel_async_sandbox_command, start_async_sandbox_command
 from core.sandbox.command_output import COMMAND_TIMEOUT_ERROR
+from core.sandbox.constants import SANDBOX_SKILLS_DIR
 from schema.sandbox.async_jobs import SandboxAsyncJobStatus
 from schema.common.tool_results import ToolResultSchema, ToolResultStatusSchema, ToolResultTypeSchema
 from service.sandbox import async_jobs as sandbox_async_jobs
@@ -19,7 +20,6 @@ from utils.markdown import markdown_body_without_front_matter
 
 
 _SKILL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
-SANDBOX_SKILLS_DIR = ".agents/skills"
 _SKILL_RESOURCE_FILES_MARKER = "__Z3R0_SKILL_RESOURCE_FILES__"
 _SKILL_RESOURCE_FILES_TRUNCATED_MARKER = "__Z3R0_SKILL_RESOURCE_FILES_TRUNCATED__"
 _MAX_SKILL_RESOURCE_FILES = 200

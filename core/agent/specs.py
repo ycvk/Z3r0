@@ -2,47 +2,6 @@ from dataclasses import dataclass
 
 from agents import Tool
 
-from core.agent.constants import DEFAULT_AGENT_CODE, SPECIALIST_AGENT_CODES
-from core.tools.fofa import fofa_search
-from core.tools.credentials import list_credentials, save_credential
-from core.tools.traffic import get_traffic_detail, search_traffic
-from core.tools.reports import export_report
-from core.tools.work_project import (
-    activate_work_project_work_item,
-    block_work_project_work_item,
-    cancel_work_project_work_item,
-    complete_current_work_project,
-    create_work_project_work_item,
-    get_work_project_work_item,
-    invalidate_work_project_evidence_record,
-    list_work_project_assets,
-    list_work_project_attack_paths,
-    list_work_project_evidence,
-    list_work_project_findings,
-    list_work_project_relations,
-    list_work_project_work_items,
-    load_work_project_context,
-    merge_work_project_asset_records,
-    record_work_project_evidence,
-    record_work_project_work_log,
-    reopen_work_project_work_item,
-    review_work_project_work_item,
-    save_work_project_asset,
-    save_work_project_attack_path,
-    save_work_project_finding,
-    save_work_project_relation,
-    submit_work_project_work_item_review,
-    update_work_project_work_item_plan,
-    update_work_project_work_item_target,
-)
-from core.tools.sandbox import (
-    cancel_sandbox_async_job,
-    execute_async_command,
-    execute_sync_command,
-    load_skill,
-    read_sandbox_command_output,
-)
-
 
 @dataclass(frozen=True, slots=True)
 class ToolMount:
@@ -50,6 +9,12 @@ class ToolMount:
     requires_sandbox_container: bool = False
     requires_work_project: bool = False
     requires_fofa_config: bool = False
+    # Each of these adds the matching guidance to the instructions of an agent that mounts the tool.
+    runs_sandbox_commands: bool = False
+    loads_sandbox_skills: bool = False
+    exports_reports: bool = False
+    # A successful dispatch from this tool ends the turn; the completion notification wakes the agent.
+    ends_turn_on_dispatch: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,92 +26,6 @@ class SubagentMount:
 class AgentSpec:
     code: str
     tools: tuple[ToolMount, ...] = ()
+    # Mounted in place of `tools` when the session is bound to a Flow.
+    flow_tools: tuple[ToolMount, ...] = ()
     subagents: tuple[SubagentMount, ...] = ()
-
-
-WORK_PROJECT_TOOLS = (
-    ToolMount(load_work_project_context, requires_work_project=True),
-    ToolMount(list_work_project_work_items, requires_work_project=True),
-    ToolMount(get_work_project_work_item, requires_work_project=True),
-    ToolMount(activate_work_project_work_item, requires_work_project=True),
-    ToolMount(update_work_project_work_item_target, requires_work_project=True),
-    ToolMount(block_work_project_work_item, requires_work_project=True),
-    ToolMount(submit_work_project_work_item_review, requires_work_project=True),
-    ToolMount(record_work_project_work_log, requires_work_project=True),
-)
-
-WORK_PROJECT_GOVERNANCE_TOOLS = (
-    ToolMount(create_work_project_work_item, requires_work_project=True),
-    ToolMount(update_work_project_work_item_plan, requires_work_project=True),
-    ToolMount(review_work_project_work_item, requires_work_project=True),
-    ToolMount(cancel_work_project_work_item, requires_work_project=True),
-    ToolMount(reopen_work_project_work_item, requires_work_project=True),
-)
-
-WORK_PROJECT_RECORD_TOOLS = (
-    ToolMount(list_work_project_assets, requires_work_project=True),
-    ToolMount(save_work_project_asset, requires_work_project=True),
-    ToolMount(list_work_project_relations, requires_work_project=True),
-    ToolMount(list_work_project_evidence, requires_work_project=True),
-    ToolMount(record_work_project_evidence, requires_work_project=True),
-    ToolMount(invalidate_work_project_evidence_record, requires_work_project=True),
-    ToolMount(list_work_project_findings, requires_work_project=True),
-    ToolMount(save_work_project_finding, requires_work_project=True),
-    ToolMount(save_work_project_relation, requires_work_project=True),
-    ToolMount(list_work_project_attack_paths, requires_work_project=True),
-    ToolMount(save_work_project_attack_path, requires_work_project=True),
-)
-
-SANDBOX_TOOLS = (
-    ToolMount(execute_sync_command, requires_sandbox_container=True),
-    ToolMount(read_sandbox_command_output, requires_sandbox_container=True),
-    ToolMount(execute_async_command, requires_sandbox_container=True),
-    ToolMount(cancel_sandbox_async_job, requires_sandbox_container=True),
-    ToolMount(load_skill, requires_sandbox_container=True),
-)
-
-CREDENTIAL_TOOLS = (
-    ToolMount(save_credential),
-    ToolMount(list_credentials),
-)
-TRAFFIC_TOOLS = (
-    ToolMount(search_traffic),
-    ToolMount(get_traffic_detail),
-)
-
-
-SPECIALIST_TOOLS = (
-    *SANDBOX_TOOLS,
-    *CREDENTIAL_TOOLS,
-    *TRAFFIC_TOOLS,
-    *WORK_PROJECT_TOOLS,
-    *WORK_PROJECT_RECORD_TOOLS,
-)
-
-FOFA_TOOLS = (
-    ToolMount(fofa_search, requires_fofa_config=True),
-)
-
-AGENT_SPECS: tuple[AgentSpec, ...] = (
-    AgentSpec(
-        code=DEFAULT_AGENT_CODE,
-        tools=(
-            *CREDENTIAL_TOOLS,
-            *TRAFFIC_TOOLS,
-            *WORK_PROJECT_TOOLS,
-            *WORK_PROJECT_GOVERNANCE_TOOLS,
-            *WORK_PROJECT_RECORD_TOOLS,
-            ToolMount(merge_work_project_asset_records, requires_work_project=True),
-            ToolMount(complete_current_work_project, requires_work_project=True),
-            ToolMount(export_report),
-        ),
-        subagents=tuple(SubagentMount(code=code) for code in SPECIALIST_AGENT_CODES),
-    ),
-    *(
-        AgentSpec(
-            code=code,
-            tools=(*SPECIALIST_TOOLS, *FOFA_TOOLS) if code == "cie" else SPECIALIST_TOOLS,
-        )
-        for code in SPECIALIST_AGENT_CODES
-    ),
-)

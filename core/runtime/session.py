@@ -716,9 +716,9 @@ class _EvictionCandidate:
 
 
 class AgentSessionPool:
-    def __init__(self, registry: AgentRegistry | None = None) -> None:
+    def __init__(self, registry: AgentRegistry) -> None:
         cfg = get_config().agent_pool
-        self._registry = registry or AgentRegistry()
+        self._registry = registry
         self._max_size = cfg.max_size
         self._ttl = cfg.ttl_seconds
         self._sweep_interval = cfg.sweep_interval_seconds
@@ -965,16 +965,15 @@ class AgentSessionPool:
 _pool: AgentSessionPool | None = None
 
 
+def install_agent_pool(pool: AgentSessionPool) -> AgentSessionPool:
+    global _pool
+    _pool = pool
+    return pool
+
+
 def get_agent_pool() -> AgentSessionPool:
-    global _pool
     if _pool is None:
-        _pool = AgentSessionPool()
-    return _pool
-
-
-def replace_agent_pool(pool: AgentSessionPool | None = None) -> AgentSessionPool:
-    global _pool
-    _pool = pool or AgentSessionPool()
+        raise RuntimeError("Agent pool is not installed")
     return _pool
 
 

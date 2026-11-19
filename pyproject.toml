@@ -64,19 +64,21 @@ ignore = ["B008"]
 [tool.basedpyright]
 include = [
     "app.py", "config.py", "database.py", "logger.py", "main.py",
-    "core", "handler", "middleware", "migrations", "model", "router", "schema", "scripts", "service", "tests", "utils",
+    "core", "handler", "middleware", "migrations", "model", "router", "schema", "scripts", "service", "tests", "tools",
+    "utils",
 ]
 pythonVersion = "3.13"
 pythonPlatform = "Linux"
 typeCheckingMode = "basic"
 
 [tool.importlinter]
-root_packages = ["router", "handler", "service", "core", "middleware", "model", "schema", "utils"]
+root_packages = ["router", "handler", "tools", "service", "core", "middleware", "model", "schema", "utils"]
 
 [[tool.importlinter.contracts]]
 name = "Layers import downward only"
 type = "layers"
-layers = ["router", "handler", "service", "core", "middleware", "model", "schema", "utils"]
+# handler serves HTTP requests and tools serves agent tool calls; neither imports the other.
+layers = ["router", "handler | tools", "service", "core", "middleware", "model", "schema", "utils"]
 # Existing core -> service imports. Remove entries as the dependency is inverted; never add new ones.
 unmatched_ignore_imports_alerting = "error"
 ignore_imports = [
@@ -99,20 +101,6 @@ ignore_imports = [
     "core.sandbox.command_jobs -> service.sandbox.commands",
     "core.task_runtime.executor -> service.agent.notifications",
     "core.task_runtime.interrupt -> service.agent.notifications",
-    "core.tools.credentials -> service.agent.credentials",
-    "core.tools.flow -> service.sandbox.async_jobs",
-    "core.tools.reports -> service.agent.reports",
-    "core.tools.reports -> service.flow.records",
-    "core.tools.sandbox -> service.sandbox.async_jobs",
-    "core.tools.sandbox -> service.sandbox.commands",
-    "core.tools.traffic -> service.sandbox.traffic",
-    "core.tools.work_project -> service.work_project.assets",
-    "core.tools.work_project -> service.work_project.evidence",
-    "core.tools.work_project -> service.work_project.findings",
-    "core.tools.work_project -> service.work_project.graph",
-    "core.tools.work_project -> service.work_project.projects",
-    "core.tools.work_project -> service.work_project.work_item_records",
-    "core.tools.work_project -> service.work_project.workflow",
     "core.work_project.context -> service.agent.credentials",
     "core.work_project.context -> service.work_project.findings",
     "core.work_project.context -> service.work_project.work_item_records",

@@ -27,7 +27,7 @@ Flow is a separate aggregate from `AgentSession`.
 - CSO and specialists remain workers inside a subtask. They do not own whether
   the Flow continues.
 - Chat tool mounts in `AGENT_SPECS` stay unchanged. Flow mounts a parallel
-  graph from `core/flow/graph.py`.
+  set, declared as `AgentSpec.flow_tools` in `tools/catalog.py`.
 
 ## Alternatives rejected
 

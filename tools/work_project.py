@@ -37,6 +37,7 @@ from service.work_project.graph import (
     save_work_project_attack_path as save_work_project_attack_path_service,
     upsert_work_project_relation,
 )
+from service.work_project.projects import complete_work_project
 from service.work_project.work_item_records import get_work_project_work_item_record, query_work_project_work_item_records
 from service.work_project.workflow import (
     activate_work_project_work_item as activate_work_project_work_item_service,
@@ -884,7 +885,6 @@ async def complete_current_work_project(ctx: RunContextWrapper[AgentRuntimeConte
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No work project is bound to this session.")
-    from service.work_project.projects import complete_work_project
     error = await complete_work_project(project_id)
     return work_project_error(error) if error else work_project_success({"project_id": project_id, "status": "completed"})
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 
 from agents import (
     Agent,
@@ -18,52 +19,59 @@ from config import AgentConfig, WORKSPACE, get_config
 from core.agent.constants import DEFAULT_AGENT_CODE
 from core.agent.instructions import build_instructions
 from core.agent.models import build_model_retry_settings, build_openai_model
-from core.agent.specs import AGENT_SPECS, AgentSpec, ToolMount
+from core.agent.specs import AgentSpec, ToolMount
 from core.agent.tool_snapshot import AgentToolSnapshot
 from core.delegation.subagents import build_subagent_tools
-from core.flow.graph import flow_mounts_for_spec, is_terminal_dispatch_tool
 from core.flow.prompts import FLOW_PRIMARY_ADDENDUM, FLOW_SPECIALIST_ADDENDUM
 from core.runtime.context import AgentRuntimeContext
-from core.tools.reports import export_report
-from core.tools.sandbox import (
-    execute_sync_command,
-    load_skill,
-)
 from schema.sandbox.async_jobs import SandboxAsyncJobStatus
 
 
-async def _end_turn_after_async_dispatch(
-    _ctx: RunContextWrapper[AgentRuntimeContext],
-    results: list[FunctionToolResult],
-) -> ToolsToFinalOutputResult:
-    """End the turn the moment an async command is successfully dispatched.
+_ToolUseBehavior = Callable[
+    [RunContextWrapper[AgentRuntimeContext], list[FunctionToolResult]],
+    Awaitable[ToolsToFinalOutputResult],
+]
 
-    Dispatching background work is turn-terminal: the agent stops here and is
-    woken by the completion notification, so it can never poll for the result.
-    A failed dispatch is not terminal, letting the agent react in the same turn.
-    """
-    for result in results:
-        if not is_terminal_dispatch_tool(getattr(result.tool, "name", None)):
-            continue
-        try:
-            payload = json.loads(result.output)
-            status = payload.get("status")
-            barrier = payload.get("barrier")
-        except (TypeError, ValueError):
-            status = None
-            barrier = None
-        if status == SandboxAsyncJobStatus.RUNNING.value or barrier == "ask":
-            return ToolsToFinalOutputResult(is_final_output=True, final_output=result.output)
-    return ToolsToFinalOutputResult(is_final_output=False)
+
+def _end_turn_after_dispatch(dispatch_tool_names: frozenset[str]) -> _ToolUseBehavior:
+    async def end_turn_after_dispatch(
+        _ctx: RunContextWrapper[AgentRuntimeContext],
+        results: list[FunctionToolResult],
+    ) -> ToolsToFinalOutputResult:
+        """End the turn the moment an async command is successfully dispatched.
+
+        Dispatching background work is turn-terminal: the agent stops here and is
+        woken by the completion notification, so it can never poll for the result.
+        A failed dispatch is not terminal, letting the agent react in the same turn.
+        """
+        for result in results:
+            if getattr(result.tool, "name", None) not in dispatch_tool_names:
+                continue
+            try:
+                payload = json.loads(result.output)
+                status = payload.get("status")
+                barrier = payload.get("barrier")
+            except (TypeError, ValueError):
+                status = None
+                barrier = None
+            if status == SandboxAsyncJobStatus.RUNNING.value or barrier == "ask":
+                return ToolsToFinalOutputResult(is_final_output=True, final_output=result.output)
+        return ToolsToFinalOutputResult(is_final_output=False)
+
+    return end_turn_after_dispatch
 
 
 class AgentRegistry:
-    def __init__(self, specs: tuple[AgentSpec, ...] = AGENT_SPECS) -> None:
+    def __init__(self, specs: tuple[AgentSpec, ...]) -> None:
         self._specs: dict[str, AgentSpec] = {spec.code: spec for spec in specs}
         self._codes_cache: tuple[str, ...] | None = None
         self._code_to_name_cache: dict[str, str] | None = None
         # Reject self-mounts and circular subagent chains at boot.
         self._validate_subagent_graph()
+
+    @property
+    def specs(self) -> tuple[AgentSpec, ...]:
+        return tuple(self._specs.values())
 
     def codes(self) -> list[str]:
         if self._codes_cache is None:
@@ -109,21 +117,21 @@ class AgentRegistry:
         agent_path = WORKSPACE / "agents" / spec.code
         soul = (agent_path / "SOUL.md").read_text(encoding="utf-8").strip()
         rules = (agent_path / "AGENTS.md").read_text(encoding="utf-8").strip()
-        mounts = flow_mounts_for_spec(spec) if graph.tool_snapshot.flow_bound else spec.tools
         flow_bound = graph.tool_snapshot.flow_bound
+        mounts = spec.flow_tools if flow_bound else spec.tools
         instructions = build_instructions(
             soul,
             rules,
             graph.tool_snapshot.sandbox_skill_metadata,
             has_sandbox_container=graph.tool_snapshot.sandbox_container_id is not None,
-            include_sandbox_commands=_has_command_tool(mounts),
-            include_sandbox_skills=_has_tool_in(mounts, load_skill),
+            include_sandbox_commands=any(mount.runs_sandbox_commands for mount in mounts),
+            include_sandbox_skills=any(mount.loads_sandbox_skills for mount in mounts),
             include_work_project_tools=(
                 graph.tool_snapshot.work_project_id is not None
                 and any(mount.requires_work_project for mount in mounts)
             ),
             include_delegation_tools=bool(spec.subagents),
-            include_report_tools=_has_tool_in(mounts, export_report),
+            include_report_tools=any(mount.exports_reports for mount in mounts),
             flow_addendum=(
                 FLOW_PRIMARY_ADDENDUM if spec.code == DEFAULT_AGENT_CODE else FLOW_SPECIALIST_ADDENDUM
             ) if flow_bound else "",
@@ -149,7 +157,9 @@ class AgentRegistry:
                 rag_context=run_context.context.rag_context,
             ),
             tools=tools,
-            tool_use_behavior=_end_turn_after_async_dispatch,
+            tool_use_behavior=_end_turn_after_dispatch(
+                frozenset(mount.tool.name for mount in mounts if mount.ends_turn_on_dispatch)
+            ),
         )
 
 
@@ -191,18 +201,6 @@ class SessionAgentGraph:
         self._models.clear()
 
 
-def _has_tool(spec: AgentSpec, tool: Tool) -> bool:
-    return any(mount.tool is tool for mount in spec.tools)
-
-
-def _has_tool_in(mounts: tuple[ToolMount, ...], tool: Tool) -> bool:
-    return any(mount.tool is tool for mount in mounts)
-
-
-def _has_command_tool(mounts: tuple[ToolMount, ...]) -> bool:
-    return any(is_terminal_dispatch_tool(getattr(mount.tool, "name", None)) or mount.tool is execute_sync_command for mount in mounts)
-
-
 def _assemble_instructions(
     *,
     stable_prefix: str,
@@ -219,10 +217,6 @@ def _assemble_instructions(
         )
         if part
     )
-
-
-def _has_work_project_tool(spec: AgentSpec) -> bool:
-    return any(mount.requires_work_project for mount in spec.tools)
 
 
 def _tool_mount_available(mount: ToolMount, snapshot: AgentToolSnapshot) -> bool:

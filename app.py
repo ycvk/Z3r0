@@ -10,10 +10,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from config import ROOT_PATH, get_config
 
+from core.agent.registry import AgentRegistry
 from core.delegation.subagents import start_subagent_runtime, stop_subagent_runtime
 from core.flow.controller import start_flow_runtime, stop_flow_runtime
 from core.lightrag.runtime import start_lightrag, stop_lightrag
-from core.runtime.session import get_agent_pool
+from core.runtime.session import AgentSessionPool, get_agent_pool, install_agent_pool
 from core.sandbox.command_jobs import start_async_sandbox_runtime, stop_async_sandbox_commands
 from database import close_engine, init_engine, migrate_database
 from logger import get_logger
@@ -59,6 +60,7 @@ from service.sandbox.traffic import (
     stop_sandbox_traffic_sync_runtime,
 )
 from service.system_user.users import create_system_user, query_system_user_by_username
+from tools.catalog import AGENT_SPECS
 
 
 logger = get_logger(__name__)
@@ -103,6 +105,10 @@ async def _reset_agent_tool_bindings() -> None:
         await invalidate_all_agent_tool_bindings()
     finally:
         set_agent_tool_binding_invalidator(None)
+
+
+def build_agent_pool() -> AgentSessionPool:
+    return AgentSessionPool(AgentRegistry(AGENT_SPECS))
 
 
 async def _invalidate_current_agent_tool_bindings(container_id: int | None) -> None:
@@ -160,6 +166,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
             shutdown_steps.append(("knowledge document runtime", stop_knowledge_document_runtime))
 
             set_tracing_disabled(True)
+            install_agent_pool(build_agent_pool())
             await start_async_sandbox_runtime()
             shutdown_steps.append(("sandbox command runtime", stop_async_sandbox_commands))
             await start_subagent_runtime()

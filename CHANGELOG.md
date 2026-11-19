@@ -13,6 +13,7 @@ All notable changes to Z3r0 are documented in this file.
 
 - Moved Python dependencies to `pyproject.toml` and `uv.lock`; the application image and the development environment install them with `uv sync`.
 - Replaced startup table creation with Alembic migrations under `migrations/`; the baseline revision builds an empty database and adopts an existing one in place.
+- Moved the agent tools from `core/tools` to the top-level `tools` package, above `service` in the layer order. `tools/catalog.py` declares the chat and Flow tool mounts of every agent, and `app.py` passes that catalog to the agent runtime at startup.
 
 ## [0.3.1] - 2026-11-19
 

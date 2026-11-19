@@ -9,7 +9,9 @@ from sqlalchemy import text
 from sqlmodel import SQLModel
 
 import database
+from app import build_agent_pool
 from config import get_config, load_config
+from core.runtime.session import install_agent_pool
 from database import close_engine, get_engine, init_engine, migrate_database
 from middleware.system_user import ACCESS_TOKEN_HEADER
 from model.system_user.users import SystemUser
@@ -28,6 +30,7 @@ async def test_db() -> None:
     cfg.database.pool_size = 4
     cfg.database.max_overflow = 4
     init_engine()
+    install_agent_pool(build_agent_pool())
     await migrate_database()
     async with get_engine().begin() as conn:
         table_names = [f'"{t.name}"' for t in SQLModel.metadata.sorted_tables]

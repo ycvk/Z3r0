@@ -15,9 +15,10 @@ from config import (
     read_config_file,
     write_config_file,
 )
+from core.agent.registry import AgentRegistry
 from core.delegation.subagents import start_subagent_runtime, stop_subagent_runtime
 from core.lightrag.runtime import lightrag_client, restart_lightrag
-from core.runtime.session import AgentSessionPool, get_agent_pool, replace_agent_pool
+from core.runtime.session import AgentSessionPool, get_agent_pool, install_agent_pool
 from logger import get_logger
 from schema.system_config.config import InstanceConfigSchema, UpdateInstanceConfigRequest
 
@@ -198,7 +199,7 @@ def _restore_instance_config(snapshot: InstanceConfigSchema) -> None:
 
 async def rebuild_agent_instances() -> None:
     old_pool = get_agent_pool()
-    replacement_pool = replace_agent_pool(AgentSessionPool())
+    replacement_pool = install_agent_pool(AgentSessionPool(AgentRegistry(old_pool.registry.specs)))
     try:
         try:
             await stop_subagent_runtime()

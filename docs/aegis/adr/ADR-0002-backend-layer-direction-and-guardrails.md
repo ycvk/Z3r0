@@ -7,10 +7,9 @@ Owners: `pyproject.toml` (contracts and tool configuration) · `.github/workflow
 ## Context
 
 The outer backend layers import in one direction: `router` -> `handler` ->
-`service`, with `model` and `schema` as leaves. `core` (agent runtime and
-tools) and `service` (domain services and persistence) import each other: 37
-module pairs go from `core` to `service`, and 16 of their 20 sub-packages form
-one mutually dependent cluster. The cycles are held together by startup
+`service`, with `model` and `schema` as leaves. `core` (agent runtime) and
+`service` (domain services and persistence) import each other: 23 module pairs
+go from `core` to `service`. The cycles are held together by startup
 callbacks, function-level imports, and duplicated logic.
 
 The repository had 12 backend tests and no lint, type check, import check,
@@ -18,9 +17,14 @@ migration tool, lock file, or CI, so structural changes could not be verified.
 
 ## Decision
 
-- Backend packages import downward only, in this order: `router`, `handler`,
-  `service`, `core`, `middleware`, `model`, `schema`, `utils`.
-- `lint-imports` enforces the order. The 37 existing `core` -> `service`
+- Backend packages import downward only, in this order: `router`, `handler`
+  and `tools`, `service`, `core`, `middleware`, `model`, `schema`, `utils`.
+- `handler` is the entry for HTTP requests and `tools` is the entry for agent
+  tool calls. They sit on the same layer and do not import each other.
+- `tools/catalog.py` declares which tools each agent mounts. `core` receives
+  that catalog from `app.py` and reads tool behaviour from `ToolMount` fields,
+  so it never imports a tool.
+- `lint-imports` enforces the order. The 23 existing `core` -> `service`
   imports are listed under `ignore_imports`; the list only shrinks, and a
   stale entry fails the check.
 - `basedpyright` runs in `basic` mode against `.basedpyright/baseline.json`;
@@ -45,8 +49,8 @@ migration tool, lock file, or CI, so structural changes could not be verified.
 ## Evidence
 
 2026-11-19, local: `uv run ruff check`, `uv run lint-imports` (1 contract kept,
-37 ignored imports), `uv run basedpyright` (0 new errors, 661 in baseline),
-`uv run pytest` (13 passed), `go vet` and `go test -race` in `sandbox/proxy`,
+23 ignored imports), `uv run basedpyright` (0 new errors, 661 in baseline),
+`uv run pytest` (16 passed), `go vet` and `go test -race` in `sandbox/proxy`,
 API contract export with no diff, both frontend builds, an application image
 build that booted against an empty database at revision `0001`, and adoption
 of a copy of the development database with models in sync.

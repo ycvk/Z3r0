@@ -39,6 +39,7 @@ COPY model ./model
 COPY router ./router
 COPY schema ./schema
 COPY service ./service
+COPY tools ./tools
 COPY utils ./utils
 COPY --from=web-builder /app/web/dist-app ./web/dist-app
 
