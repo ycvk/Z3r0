@@ -2,6 +2,18 @@
 
 All notable changes to Z3r0 are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Added a CI workflow that runs `ruff`, the import-layer contract, `basedpyright`, the PostgreSQL-backed test suite, the `sandbox-proxy` checks, sandbox skill validation, the API contract sync check, and the frontend builds.
+- Added an import-layer contract (`lint-imports`) for the backend packages and a `basedpyright` baseline so that only new type errors fail the check.
+
+### Changed
+
+- Moved Python dependencies to `pyproject.toml` and `uv.lock`; the application image and the development environment install them with `uv sync`.
+- Replaced startup table creation with Alembic migrations under `migrations/`; the baseline revision builds an empty database and adopts an existing one in place.
+
 ## [0.3.1] - 2026-11-19
 
 ### Added

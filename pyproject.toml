@@ -1,0 +1,125 @@
+[project]
+name = "z3r0"
+version = "0.3.1"
+description = "AI-native red-team workbench for authorized penetration testing and vulnerability research."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic==1.20.1",
+    "asyncpg==0.31.0",
+    "asyncssh==2.24.0",
+    "cvss==3.6",
+    "docker==7.2.0",
+    "fastapi==0.139.0",
+    "httpx==0.28.1",
+    "lightrag-hku==1.5.4",
+    "openai==2.45.0",
+    "openai-agents==0.18.2",
+    "pgvector==0.5.0",
+    "pydantic==2.13.4",
+    "pyjwt==2.13.0",
+    "pypdf==6.14.2",
+    "python-multipart==0.0.32",
+    "requests==2.34.2",
+    "sqlalchemy[asyncio]==2.0.51",
+    "sqlmodel==0.0.39",
+    "starlette==1.3.1",
+    "tiktoken==0.13.0",
+    "uvicorn==0.51.0",
+    "websockets==16.1",
+]
+
+[dependency-groups]
+dev = [
+    "aiohttp==3.14.1",
+    "basedpyright==1.40.2",
+    "import-linter==2.16",
+    "pytest==8.4.2",
+    "pytest-asyncio==1.2.0",
+    "ruff==0.17.4",
+]
+
+[tool.uv]
+package = false
+exclude-newer = "7 days"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+extend-exclude = ["docs", "sandbox", "web"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B", "ASYNC"]
+# FastAPI declares dependencies and query parameters as call defaults.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# The script puts the repository root on sys.path before importing the app.
+"scripts/export_schema.py" = ["E402"]
+
+[tool.basedpyright]
+include = [
+    "app.py", "config.py", "database.py", "logger.py", "main.py",
+    "core", "handler", "middleware", "migrations", "model", "router", "schema", "scripts", "service", "tests", "utils",
+]
+pythonVersion = "3.13"
+pythonPlatform = "Linux"
+typeCheckingMode = "basic"
+
+[tool.importlinter]
+root_packages = ["router", "handler", "service", "core", "middleware", "model", "schema", "utils"]
+
+[[tool.importlinter.contracts]]
+name = "Layers import downward only"
+type = "layers"
+layers = ["router", "handler", "service", "core", "middleware", "model", "schema", "utils"]
+# Existing core -> service imports. Remove entries as the dependency is inverted; never add new ones.
+unmatched_ignore_imports_alerting = "error"
+ignore_imports = [
+    "core.conversation.compaction -> service.agent.session_state",
+    "core.delegation.subagents -> service.agent.event_log",
+    "core.delegation.subagents -> service.agent.notifications",
+    "core.delegation.subagents -> service.agent.session_state",
+    "core.delegation.subagents -> service.agent.subordinates",
+    "core.flow.controller -> service.agent.reports",
+    "core.flow.controller -> service.agent.runtime",
+    "core.flow.controller -> service.agent.session_state",
+    "core.flow.controller -> service.flow.records",
+    "core.flow.controller -> service.system_user.users",
+    "core.runtime.session -> service.agent.event_log",
+    "core.runtime.session -> service.agent.notifications",
+    "core.runtime.session -> service.agent.session_state",
+    "core.runtime.timeline -> service.agent.event_log",
+    "core.sandbox.command_jobs -> service.agent.notifications",
+    "core.sandbox.command_jobs -> service.sandbox.async_jobs",
+    "core.sandbox.command_jobs -> service.sandbox.commands",
+    "core.task_runtime.executor -> service.agent.notifications",
+    "core.task_runtime.interrupt -> service.agent.notifications",
+    "core.tools.credentials -> service.agent.credentials",
+    "core.tools.flow -> service.sandbox.async_jobs",
+    "core.tools.reports -> service.agent.reports",
+    "core.tools.reports -> service.flow.records",
+    "core.tools.sandbox -> service.sandbox.async_jobs",
+    "core.tools.sandbox -> service.sandbox.commands",
+    "core.tools.traffic -> service.sandbox.traffic",
+    "core.tools.work_project -> service.work_project.assets",
+    "core.tools.work_project -> service.work_project.evidence",
+    "core.tools.work_project -> service.work_project.findings",
+    "core.tools.work_project -> service.work_project.graph",
+    "core.tools.work_project -> service.work_project.projects",
+    "core.tools.work_project -> service.work_project.work_item_records",
+    "core.tools.work_project -> service.work_project.workflow",
+    "core.work_project.context -> service.agent.credentials",
+    "core.work_project.context -> service.work_project.findings",
+    "core.work_project.context -> service.work_project.work_item_records",
+    "core.work_project.context -> service.work_project.workflow",
+]
+
+[tool.alembic]
+script_location = "%(here)s/migrations"
+prepend_sys_path = ["."]
+file_template = "%%(rev)s_%%(slug)s"

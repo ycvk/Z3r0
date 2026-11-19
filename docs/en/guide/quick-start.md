@@ -141,25 +141,14 @@ Use the following setup for local development.
 
 ### Configure the environment
 
-- Python version: 3.13.5
+- Python version: 3.13
 - Node.js version: 24.18.0
+- [uv](https://docs.astral.sh/uv/) for Python dependencies
 
-Create a virtual environment with the following commands:
-
-```bash
-python -m venv .venv
-
-# Windows:
-.venv\Scripts\Activate.ps1
-
-# Linux:
-source .venv/bin/activate
-```
-
-Install system dependencies:
+Install the locked backend dependencies into `.venv`:
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
 ```bash
@@ -189,10 +178,43 @@ Create `.z3r0/config.json` and fill in the relevant information based on the exa
 Start the project with the following command:
 
 ```bash
-python main.py
+uv run python main.py
 ```
 
 By default, the service listens on `0.0.0.0:8000`. Visit `http://127.0.0.1:8000/` to access it.
+
+### Run the checks
+
+CI runs the following checks on every push and pull request. Run them locally before committing:
+
+```bash
+uv run ruff check
+uv run lint-imports
+uv run basedpyright
+uv run pytest
+cd sandbox/proxy && go vet ./... && go test -race ./...
+```
+
+```bash
+uv run python scripts/export_schema.py
+cd web && npm run build && npm run build:landing
+```
+
+`pytest` runs against a PostgreSQL database named `z3r0_test` on the server configured in `.z3r0/config.json`. Create it once:
+
+```bash
+docker exec postgres createdb -U root z3r0_test
+```
+
+`lint-imports` enforces the backend layer order `router`, `handler`, `service`, `core`, `middleware`, `model`, `schema`, `utils`: a package imports only from packages listed after it. `basedpyright` reports only errors that are absent from `.basedpyright/baseline.json`.
+
+### Change the database schema
+
+The application applies the Alembic revisions under `migrations/versions` at startup. After changing a model, generate a revision against a database that is at the latest revision, then review it:
+
+```bash
+uv run alembic revision --autogenerate -m "describe the change"
+```
 
 ## Next step
 

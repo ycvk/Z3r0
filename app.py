@@ -15,7 +15,7 @@ from core.flow.controller import start_flow_runtime, stop_flow_runtime
 from core.lightrag.runtime import start_lightrag, stop_lightrag
 from core.runtime.session import get_agent_pool
 from core.sandbox.command_jobs import start_async_sandbox_runtime, stop_async_sandbox_commands
-from database import close_engine, create_all_tables, init_engine
+from database import close_engine, init_engine, migrate_database
 from logger import get_logger
 from middleware.common import (
     http_exception_handler,
@@ -150,7 +150,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
                 ("file HTTP client", close_file_http_client),
                 ("noVNC HTTP client", close_novnc_http_client),
             ))
-            await create_all_tables()
+            await migrate_database()
             await _bootstrap_admin_user()
             await _bootstrap_local_host()
 

@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-import sys
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-
-ROOT_PATH = Path(__file__).resolve().parents[1]
-if str(ROOT_PATH) not in sys.path:
-    sys.path.insert(0, str(ROOT_PATH))
 
 import jwt
 import pytest
@@ -16,7 +10,7 @@ from sqlmodel import SQLModel
 
 import database
 from config import get_config, load_config
-from database import close_engine, create_all_tables, get_engine, init_engine
+from database import close_engine, get_engine, init_engine, migrate_database
 from middleware.system_user import ACCESS_TOKEN_HEADER
 from model.system_user.users import SystemUser
 from service.sandbox.control_proxy import close_control_proxy_http_client
@@ -34,7 +28,7 @@ async def test_db() -> None:
     cfg.database.pool_size = 4
     cfg.database.max_overflow = 4
     init_engine()
-    await create_all_tables()
+    await migrate_database()
     async with get_engine().begin() as conn:
         table_names = [f'"{t.name}"' for t in SQLModel.metadata.sorted_tables]
         table_names.extend(['"agent_messages"', '"agent_sessions"'])

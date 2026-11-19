@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Index, String, UniqueConstraint
+from sqlalchemy import Column, Index, String
 from sqlmodel import Field, SQLModel
 
 from schema.work_project.evidence import WorkProjectEvidenceKind, WorkProjectEvidenceStatus
@@ -33,8 +33,6 @@ class WorkProjectEvidence(SQLModel, table=True):
 
 class WorkProjectRelationEvidence(SQLModel, table=True):
     __tablename__ = "work_project_relation_evidence"
-    __table_args__ = (UniqueConstraint("relation_id", "evidence_id", name="uq_work_project_relation_evidence"),)
-
     relation_id: int = Field(foreign_key="work_project_relations.id", primary_key=True, ondelete="CASCADE")
     evidence_id: int = Field(foreign_key="work_project_evidence.id", primary_key=True, index=True, ondelete="CASCADE")
     created_at: datetime = Field(default_factory=datetime.now)
@@ -42,8 +40,6 @@ class WorkProjectRelationEvidence(SQLModel, table=True):
 
 class WorkProjectFindingEvidence(SQLModel, table=True):
     __tablename__ = "work_project_finding_evidence"
-    __table_args__ = (UniqueConstraint("finding_id", "evidence_id", name="uq_work_project_finding_evidence"),)
-
     finding_id: int = Field(foreign_key="work_project_findings.id", primary_key=True, ondelete="CASCADE")
     evidence_id: int = Field(foreign_key="work_project_evidence.id", primary_key=True, index=True, ondelete="CASCADE")
     created_at: datetime = Field(default_factory=datetime.now)
@@ -51,8 +47,6 @@ class WorkProjectFindingEvidence(SQLModel, table=True):
 
 class WorkProjectAttackPathStepEvidence(SQLModel, table=True):
     __tablename__ = "work_project_attack_path_step_evidence"
-    __table_args__ = (UniqueConstraint("step_id", "evidence_id", name="uq_work_project_attack_path_step_evidence"),)
-
     step_id: int = Field(foreign_key="work_project_attack_path_steps.id", primary_key=True, ondelete="CASCADE")
     evidence_id: int = Field(foreign_key="work_project_evidence.id", primary_key=True, index=True, ondelete="CASCADE")
     created_at: datetime = Field(default_factory=datetime.now)

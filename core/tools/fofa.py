@@ -144,7 +144,7 @@ def _asset_from_row(row: Any) -> FofaAssetSchema:
     return FofaAssetSchema.model_validate(
         {
             field: _string_value(value)
-            for field, value in zip(_FOFA_FIELDS, row)
+            for field, value in zip(_FOFA_FIELDS, row, strict=False)
         }
     )
 

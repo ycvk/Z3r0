@@ -1,6 +1,7 @@
 import re
 from datetime import datetime
 from enum import StrEnum
+from itertools import pairwise
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -242,7 +243,7 @@ class WorkProjectAttackPathRequest(BaseModel):
             raise ValueError("The first attack path step must start at `entry_asset_id`")
         if self.steps[-1].target_asset_id != self.target_asset_id:
             raise ValueError("The last attack path step must end at `target_asset_id`")
-        for previous, current in zip(self.steps, self.steps[1:]):
+        for previous, current in pairwise(self.steps):
             if previous.target_asset_id != current.source_asset_id:
                 raise ValueError("Attack path steps must form a continuous chain")
         path_assets = [self.entry_asset_id, *(step.target_asset_id for step in self.steps)]

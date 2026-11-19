@@ -68,8 +68,6 @@ class WorkProjectWorkItemTarget(SQLModel, table=True):
 
 class WorkProjectWorkItemDependency(SQLModel, table=True):
     __tablename__ = "work_project_work_item_dependencies"
-    __table_args__ = (UniqueConstraint("work_item_id", "depends_on_id", name="uq_work_project_work_item_dependency"),)
-
     work_item_id: int = Field(foreign_key="work_project_work_items.id", primary_key=True, ondelete="CASCADE")
     depends_on_id: int = Field(foreign_key="work_project_work_items.id", primary_key=True, index=True, ondelete="CASCADE")
     created_at: datetime = Field(default_factory=datetime.now)

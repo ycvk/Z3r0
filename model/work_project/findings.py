@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Index, String, UniqueConstraint
+from sqlalchemy import Column, Index, String
 from sqlmodel import Field, SQLModel
 
 from schema.work_project.findings import (
@@ -44,8 +44,6 @@ class WorkProjectFinding(SQLModel, table=True):
 
 class WorkProjectFindingAsset(SQLModel, table=True):
     __tablename__ = "work_project_finding_assets"
-    __table_args__ = (UniqueConstraint("finding_id", "asset_id", "role", name="uq_work_project_finding_asset"),)
-
     finding_id: int = Field(foreign_key="work_project_findings.id", primary_key=True, ondelete="CASCADE")
     asset_id: int = Field(foreign_key="work_project_assets.id", primary_key=True, index=True, ondelete="CASCADE")
     role: WorkProjectFindingAssetRole = Field(sa_column=Column(String(32), primary_key=True, nullable=False))

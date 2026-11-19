@@ -2,6 +2,9 @@
 
 ARG NODE_VERSION=24.18.0
 ARG PYTHON_VERSION=3.13.5
+ARG UV_VERSION=0.13.7
+
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv-bin
 
 FROM node:${NODE_VERSION}-alpine AS web-builder
 
@@ -18,17 +21,20 @@ FROM python:${PYTHON_VERSION}-slim AS backend
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV UV_PYTHON_DOWNLOADS=never
+ENV PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
-COPY requirements.txt ./
-RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir -r requirements.txt
+COPY --from=uv-bin /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock .python-version ./
+RUN uv sync --frozen --no-dev --no-cache
 
 COPY app.py config.py database.py logger.py main.py ./
 COPY core ./core
 COPY handler ./handler
 COPY middleware ./middleware
+COPY migrations ./migrations
 COPY model ./model
 COPY router ./router
 COPY schema ./schema

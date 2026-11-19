@@ -14,6 +14,7 @@ import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from agents import FunctionTool
 from agents.tool_context import ToolContext
 
 from app import create_app
@@ -27,7 +28,6 @@ from core.tools.sandbox import execute_sync_command
 from core.tools.traffic import get_traffic_detail, search_traffic
 from core.work_project.context import activate_work_project_context
 from database import get_async_session
-from middleware.system_user import AuthUser
 from model.flow.flows import Flow
 from model.host.hosts import ManagedHost
 from model.sandbox.containers import SandboxContainer
@@ -48,17 +48,15 @@ def _free_port() -> int:
         return int(s.getsockname()[1])
 
 
-async def _invoke_tool(tool: object, ctx: AgentRuntimeContext, **kwargs: object) -> dict[str, object]:
+async def _invoke_tool(tool: FunctionTool, ctx: AgentRuntimeContext, **kwargs: object) -> dict[str, object]:
     raw_args = json.dumps(kwargs)
-    tool_name = str(getattr(tool, "name"))
     tool_ctx = ToolContext(
         context=ctx,
-        tool_name=tool_name,
+        tool_name=tool.name,
         tool_call_id="call-test",
         tool_arguments=raw_args,
     )
-    on_invoke = getattr(tool, "on_invoke_tool")
-    raw = await on_invoke(tool_ctx, raw_args)
+    raw = await tool.on_invoke_tool(tool_ctx, raw_args)
     return json.loads(raw)
 
 
@@ -278,7 +276,8 @@ async def test_live_go_proxy_http_https_mitm_and_high_volume_sync(
     # Build real Go sandbox-proxy binary (with configurable listen addrs via short wrapper test or subproc)
     proxy_src = ROOT_PATH / "sandbox" / "proxy"
     bin_path = tmp_path / "sandbox-proxy-bin"
-    subprocess.run(
+    await asyncio.to_thread(
+        subprocess.run,
         ["go", "build", "-o", str(bin_path), "."],
         cwd=str(proxy_src),
         check=True,
@@ -298,20 +297,21 @@ async def test_live_go_proxy_http_https_mitm_and_high_volume_sync(
         "SANDBOX_CONTROL_PROXY_ADDR": f"127.0.0.1:{control_port}",
         "SANDBOX_EGRESS_PROXY_ADDR": f"127.0.0.1:{egress_port}",
     }
-    subprocess.run([str(bin_path), "--init-ca"], env=env, check=True)
+    await asyncio.to_thread(subprocess.run, [str(bin_path), "--init-ca"], env=env, check=True)
     assert ca_cert.is_file() and ca_key.is_file()
 
-    proc = subprocess.Popen(
-        [str(bin_path)],
+    proc = await asyncio.create_subprocess_exec(
+        str(bin_path),
         env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
     )
 
     # Spin up local HTTP + self-signed HTTPS upstream targets
     tls_cert = tmp_path / "upstream.crt"
     tls_key = tmp_path / "upstream.key"
-    subprocess.run(
+    await asyncio.to_thread(
+        subprocess.run,
         [
             "openssl", "req", "-x509", "-newkey", "ec",
             "-pkeyopt", "ec_paramgen_curve:prime256v1",
@@ -461,7 +461,8 @@ async def test_live_go_proxy_http_https_mitm_and_high_volume_sync(
     finally:
         proc.terminate()
         try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
+            await asyncio.wait_for(proc.wait(), timeout=5)
+        except TimeoutError:
             proc.kill()
+            await proc.wait()
         await up_runner.cleanup()

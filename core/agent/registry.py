@@ -26,7 +26,6 @@ from core.flow.prompts import FLOW_PRIMARY_ADDENDUM, FLOW_SPECIALIST_ADDENDUM
 from core.runtime.context import AgentRuntimeContext
 from core.tools.reports import export_report
 from core.tools.sandbox import (
-    execute_async_command,
     execute_sync_command,
     load_skill,
 )

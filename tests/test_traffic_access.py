@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from aiohttp import web
+import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlmodel import select
@@ -290,7 +291,7 @@ async def test_proxy_traffic_sync_dedup_and_clear_error_surface(test_db: None) -
 
         # Proxy failure during clear_traffic on a running container must surface, not be swallowed
         fail_delete = True
-        with pytest.raises(Exception):
+        with pytest.raises(httpx.HTTPStatusError):
             await traffic_service.clear_traffic(
                 user_id=alice.id or 0,
                 user_role=SystemUserRole.USER,

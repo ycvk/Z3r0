@@ -28,7 +28,6 @@ from model.work_project.workflow import (
     WorkProjectWorkItem,
     WorkProjectWorkItemDependency,
     WorkProjectWorkItemTarget,
-    WorkProjectWorkLog,
 )
 from schema.work_project.assets import WorkProjectAssetScope
 from schema.work_project.evidence import WorkProjectEvidenceStatus

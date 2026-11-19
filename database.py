@@ -1,10 +1,11 @@
 from agents.extensions.memory import SQLAlchemySession
-from sqlalchemy import URL, text
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import URL, Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from config import get_config
+from config import ROOT_PATH, get_config
 from logger import get_logger
 from model.egress_proxy.proxies import EgressProxy
 from model.host.hosts import ManagedHost
@@ -46,7 +47,7 @@ from utils.sdk_tables import agent_messages, agent_sessions
 
 logger = get_logger(__name__)
 
-# registered so SQLModel.metadata picks every table up at create_all time
+# registered so SQLModel.metadata knows every table when migrations are generated and checked
 _registered_models = [
     SystemUser, ManagedHost, EgressProxy, SandboxImage, SandboxContainer, WorkProject, WorkProjectOwner,
     WorkProjectAsset, WorkProjectRelation, WorkProjectFinding, WorkProjectFindingAsset,
@@ -62,31 +63,32 @@ _registered_sdk_tables = [agent_sessions, agent_messages]
 _engine: AsyncEngine | None = None
 
 
-async def create_all_tables() -> None:
-    global _engine
-    if _engine is None:
-        raise RuntimeError("database engine is not initialized")
+def alembic_config(connection: Connection) -> Config:
+    config = Config(toml_file=ROOT_PATH / "pyproject.toml")
+    config.attributes["connection"] = connection
+    return config
+
+
+def _upgrade_to_head(connection: Connection) -> None:
+    command.upgrade(alembic_config(connection), "head")
+
+
+async def migrate_database() -> None:
+    engine = get_engine()
 
     # The SDK owns its session schema. Initialize it through the public session API
-    # before creating app tables whose foreign keys reference that schema.
+    # before migrating app tables whose foreign keys reference that schema.
     sdk_session = SQLAlchemySession(
         session_id="__schema_initialization__",
-        engine=_engine,
+        engine=engine,
         create_tables=True,
     )
     await sdk_session.get_items(limit=0)
 
-    async with _engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-        for col_name in ("llm_requests", "input_tokens", "output_tokens", "cached_tokens", "total_tokens"):
-            await conn.execute(
-                text(f"ALTER TABLE agent_session_meta ADD COLUMN IF NOT EXISTS {col_name} BIGINT NOT NULL DEFAULT 0")
-            )
-        await conn.execute(text(
-            "ALTER TABLE sandbox_traffic_entries ADD COLUMN IF NOT EXISTS proxy_boot VARCHAR(64) NOT NULL DEFAULT ''"
-        ))
+    async with engine.begin() as conn:
+        await conn.run_sync(_upgrade_to_head)
 
-    logger.info("all tables created")
+    logger.info("database schema migrated to the latest revision")
 
 
 async def close_engine() -> None:

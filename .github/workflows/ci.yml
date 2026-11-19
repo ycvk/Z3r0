@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.13.7"
+  UV_FROZEN: "1"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: ghcr.io/yv1ing/postgres-for-rag:latest
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: "123456"
+          POSTGRES_DB: z3r0_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U root -d z3r0_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: sandbox/proxy/go.mod
+          cache: false
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check
+      - name: Import layers
+        run: uv run lint-imports
+      - name: Type check
+        run: uv run basedpyright
+      - name: Test
+        run: |
+          cp .z3r0/config.json.example .z3r0/config.json
+          uv run pytest
+
+  proxy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sandbox/proxy
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: sandbox/proxy/go.mod
+          cache: false
+      - name: Format
+        run: test -z "$(gofmt -l .)"
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race ./...
+
+  skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Validate sandbox skills
+        run: sh sandbox/.agents/validate-skills.sh sandbox/.agents/skills
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install dependencies
+        run: |
+          uv sync --frozen
+          npm --prefix web ci
+      - name: API contract is in sync
+        run: |
+          uv run python scripts/export_schema.py
+          npm --prefix web run generate:api
+          git diff --exit-code -- web/openapi.json web/src/shared/api/generated
+      - name: Build
+        run: |
+          npm --prefix web run build
+          npm --prefix web run build:landing

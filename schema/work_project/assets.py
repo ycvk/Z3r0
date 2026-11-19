@@ -153,6 +153,6 @@ def _validate_hostname_or_ip(value: str, label: str, *, allow_ip: bool = True) -
         raise ValueError(f"{label.capitalize()} locator must be a DNS name")
     except ValueError:
         if not allow_ip and re.fullmatch(r"\d+(?:\.\d+){3}", value):
-            raise ValueError(f"{label.capitalize()} locator must be a DNS name")
+            raise ValueError(f"{label.capitalize()} locator must be a DNS name") from None
     if len(value) > 253 or not re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", value):
         raise ValueError(f"{label.capitalize()} locator must be a valid hostname")
