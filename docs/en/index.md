@@ -22,7 +22,7 @@ features:
   - title: Multi-agent orchestration
     details: A lead agent coordinates specialist agents across interactive Playground sessions and autonomous Flows with token ledgers and a credentials vault.
   - title: Command Guard and traffic capture
-    details: Destructive sandbox commands require one-shot operator confirmation, and HTTP/HTTPS proxy exchanges are captured and searchable by agents and operators.
+    details: Destructive sandbox commands require one-shot operator confirmation, and HTTP/HTTPS proxy exchanges are captured, searchable by agents and operators, and can be saved as work project evidence.
   - title: Project evidence plane
     details: Work projects bind graph-targeted work items to authorized assets, work item-attributed evidence, validated findings, continuous attack paths, retest candidates, and lead review decisions.
   - title: Retrieval context plane
@@ -36,5 +36,5 @@ features:
   - title: Unified egress layer
     details: Container traffic can be routed through direct, HTTP, HTTPS, or SOCKS5 modes using one platform-managed policy surface.
   - title: Operator workbench
-    details: The frontend combines chat, workflow state, graph review, evidence chains, attack paths, sandbox selection, terminal, files, and noVNC.
+    details: The frontend combines chat with session token usage, workflow state, graph review, evidence chains, attack paths, project traffic and credentials, sandbox selection, terminal, files, and noVNC.
 ---

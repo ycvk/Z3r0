@@ -29,7 +29,7 @@ The platform follows a specialist operating model: a lead agent governs scope, d
 | Replayable runtime | Normalized session events support live streaming, interruption, long-running work, recovery, and historical replay. |
 | Controlled execution | Managed Docker sandboxes provide shell, files, browser/noVNC, skills, preloaded tooling, and container-level egress policy. |
 | Retrieval context | LightRAG provides matching source chunks and knowledge-graph context for task-oriented inputs. |
-| Operator workbench | Overview, Workflow, Graph, Assets, Findings, Attack paths, Evidence, and Activity views support professional review. |
+| Operator workbench | Overview, Workflow, Graph, Assets, Findings, Attack paths, Evidence, Traffic, Credentials, and Activity views support professional review. |
 
 ## Architecture
 

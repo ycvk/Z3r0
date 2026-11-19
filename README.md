@@ -212,7 +212,7 @@ Sandbox resources are managed infrastructure. Administrators manage Docker hosts
 
 The default sandbox image provides a focused security workspace with targeted DNS and ownership checks (`dnsx`, `dig`, `nslookup`, `whois`), low-volume HTTP inspection (`curl`, `wget`, `httpx`, `openssl`), focused service diagnostics (`nc`, `nmap`), local file and archive triage (`file`, `sha256sum`, `7z`, `unzip`, `tar`, `readelf`), Android and firmware analysis (`jadx`, `apktool`, Ghidra, `binwalk`), binary and pwn tooling (`gdb`, Pwndbg, `strace`, `ltrace`, `pwntools`, and the `pwntools`-provided `checksec`), browser automation through `agent-browser-cli`, and Python workflows through `uv`.
 
-Outbound traffic is normalized through a container-level egress profile. The sandbox runtime exports proxy environment variables and trusts a container-local root CA so `sandbox-proxy` can route HTTP and HTTPS traffic, capture decrypted request/response exchanges for search and review, and forward upstream through direct access or a managed HTTP, HTTPS, SOCKS5, or Tor policy.
+Outbound traffic is normalized through a container-level egress profile. The sandbox runtime exports proxy environment variables and trusts a container-local root CA so `sandbox-proxy` can route HTTP and HTTPS traffic, capture decrypted request/response exchanges for search and review, and forward upstream through direct access or a managed HTTP, HTTPS, SOCKS5, or Tor policy. Proxied requests offer upstream only the `gzip`, `deflate`, and `identity` content codings, which keeps captured response bodies readable.
 
 ## Technical highlights
 
@@ -220,14 +220,14 @@ Outbound traffic is normalized through a container-level egress profile. The san
 | --- | --- |
 | Multi-agent orchestration | A lead agent coordinates specialist agents for intelligence gathering, validation, code audit, reverse analysis, and cryptanalysis. |
 | Autonomous Flows | Operators launch goal-driven runs on `/flows` with code-owned subtask progression, `ask`/`done` checkpoints, token accounting, a credentials vault, and Markdown reports. |
-| Command Guard & traffic capture | Destructive sandbox commands pause for one-shot operator confirmation, while HTTP and HTTPS proxy exchanges are indexed for full-text search. |
+| Command Guard & traffic capture | Destructive sandbox commands pause for one-shot operator confirmation, while HTTP and HTTPS proxy exchanges are indexed for full-text search and can be saved as work project evidence. |
 | Graph-driven operations | Work projects bind specialist work items to in-scope assets, test surfaces, evidence, findings, and attack-path validation. |
 | Retrieval context plane | Building knowledge graphs with LightRAG Core provides matching original document chunks and graph context for task-oriented inputs. |
 | Replayable event timeline | The UI consumes normalized timeline events that can be streamed live or loaded later as history. |
 | Distributed sandbox resources | Managed Docker hosts, images, and containers allow execution environments to be isolated, scaled, and assigned to projects. |
 | Preloaded sandbox toolchain | The default image provides targeted DNS, HTTP, and service diagnostics plus local artifact, Android, firmware, reverse engineering, browser, and Python capabilities behind sandbox-local skills. |
 | Unified egress layer | Container traffic can be routed through direct, HTTP, HTTPS, or SOCKS5 modes using one platform-managed policy surface. |
-| Operator workbench | The frontend combines chat, workflow state, graph review, evidence chains, attack paths, sandbox selector, terminal, files, and noVNC. |
+| Operator workbench | The frontend combines chat with session token usage, workflow state, graph review, evidence chains, attack paths, project traffic and credentials, sandbox selector, terminal, files, and noVNC. |
 
 ## Expert team
 

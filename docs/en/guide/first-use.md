@@ -21,7 +21,7 @@ Enter the configured administrator account and password. After successful authen
 
 The system contains the following core modules:
 
-1. Playground: Provides session-based interaction and collaboration with the agent team.
+1. Playground: Provides session-based interaction and collaboration with the agent team, with token usage shown per session.
 2. Flows: Launches autonomous goal-driven runs against a running sandbox with subtask tracking, credentials vault, live HTTP/HTTPS traffic review, token accounting, and Markdown reports.
 3. Work projects: Manages authorized scope, graph-targeted workflow, evidence, findings, attack paths, decisions, and sessions.
 4. Knowledge: Manages document ingestion, vector inspection, semantic retrieval, and knowledge graph exploration.
@@ -113,7 +113,7 @@ In the `Sandbox containers` module, create a container and select the correspond
 
 ### Test the container
 
-After the sandbox container is created, use the action buttons on the right side of the list item to operate it. Start the container, then access the sandbox through the web terminal, file manager, and noVNC display.
+After the sandbox container is created, use the action buttons on the right side of the list item to operate it. Start the container, then access the sandbox through the web terminal, file manager, and noVNC display. A container is listed as running once its control proxy is ready, which takes a few seconds while the sandbox installs its local root CA.
 
 ![create-container-2](/images/create-container-2.png)
 
@@ -129,7 +129,7 @@ After the work project is created, it appears in `Playground`. Open it, create a
 
 ![project-example-1](/images/project-example-1.png)
 
-During execution, open the project workspace to review the eight operational views:
+During execution, open the project workspace to review the ten operational views:
 
 - `Overview` summarizes scope coverage, current assignments, findings, paths, evidence, and active agents.
 - `Workflow` connects each assignment to assets, test surfaces, dependencies, coverage conclusions, work item-attributed evidence, decisions, and subordinate runs; status and assignee filters support focused review.
@@ -138,6 +138,8 @@ During execution, open the project workspace to review the eight operational vie
 - `Findings` presents validation, severity, impact, remediation, disposition, CWE/CVSS, affected assets, and supporting evidence.
 - `Attack paths` reconstructs continuous offensive steps with blockers, evidence, and optional ATT&CK mappings.
 - `Evidence` preserves work item-attributed immutable observations with source references, integrity hashes, supersession, and lifecycle state.
+- `Traffic` lists the HTTP and HTTPS exchanges captured from the bound sandbox with full-text, path, method, and status filters, shows request and response detail, and saves a selected exchange as `http_exchange` evidence on a work item.
+- `Credentials` holds the project credentials vault, including entries saved by operators and agents, with masked secrets, reveal, copy, and delete.
 - `Activity` records business-significant state and plan changes, decisions, blockers, handoffs, and results.
 
 Each specialist receives the assignment, target coverage, supporting evidence, surrounding graph, and relevant retest opportunities needed for the current task. Evidence remains attributed to the work item as relationships, findings, and path steps are validated. Once every target has a conclusion and the result is ready, the lead agent can accept the work or return specific target surfaces for further analysis. Useful negative results remain available as evidence and can close a test surface without inventing a vulnerability. New credentials, trust relationships, routes, versions, code paths, and keys bring related follow-up and retest work into view.

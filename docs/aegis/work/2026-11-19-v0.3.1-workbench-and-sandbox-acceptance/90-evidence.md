@@ -1,0 +1,21 @@
+# Evidence (v0.3.1 Project Workbench and Sandbox Image Acceptance)
+
+- `uv run --active --no-project --with pytest==8.4.2 --with pytest-asyncio==1.2.0 pytest -v tests/`: 12 passed
+  - `test_work_project_credentials_traffic_scope_and_one_click_evidence`: project credential CRUD and tenant isolation, bound-container traffic under the project scope, and exchange-to-`http_exchange` evidence conversion
+  - `test_proxy_sync_stores_binary_bodies_and_follows_proxy_restart`: a payload with NUL bytes and an unpaired surrogate is stored and does not block later entries; a new proxy boot id restarts the cursor; `/api/traffic/ingest` accepts NUL bytes
+  - `test_start_applies_egress_once_slow_control_proxy_is_ready`: start waits for a control proxy that listens 3 seconds late, posts the egress environment once, and records `RUNNING` afterwards
+  - `test_start_fails_and_stops_container_when_control_proxy_never_listens`: start fails, the container is stopped, and the status is `STOPPED`
+- `cd sandbox/proxy && go vet ./... && go test -race ./...`: 7 passed (adds body decoding for `gzip`/`deflate` with binary and undecodable payloads recorded empty, `Accept-Encoding` narrowing on HTTP and MITM HTTPS, and boot-scoped `/traffic` cursors)
+- `uv run --active --no-project python scripts/export_schema.py && npm --prefix web run build && npm --prefix web run build:landing`: pass
+- Real-container acceptance on 2026-11-19: 48 of 48 checks passed
+  - Image: `docker build --platform linux/amd64 -t penetration-runtime:latest .` in `sandbox/` on an arm64 host under OrbStack emulation, 3.64 GB; the build runs the skill validation stage
+  - Harness: the control-plane services (`create_sandbox_container`, `start_sandbox_container`, `execute_sandbox_container_command`, the traffic sync runtime, and the REST handlers) against the `z3r0_test` database and one real container; targets are an HTTP server and a self-signed HTTPS server on the host reached as `host.docker.internal`, plus `example.com`, PyPI, the npm registry, and GitHub
+  - Start: the control proxy answered 17.0 s after the first start request and 11.9 s after a restart (`update-ca-certificates` takes about 13 s under emulation); the start call returned after readiness with the egress profile written
+  - Trust: the CA is in the system bundle, the Chrome NSS database, and Java `cacerts`, with key mode `600`; `curl`, `wget`, `git`, Python `urllib`, `requests` and `httpx` installed by `uv` from PyPI, Node TLS through the proxy, `npm`, and Chrome verified HTTPS with issuer `Z3r0 Sandbox MITM Root CA`
+  - Capture: HTTP and HTTPS exchanges were stored with request bodies and gunzipped response bodies and carried the container owner and bound project; the target received `Accept-Encoding: gzip, deflate` from Chrome and the Chrome response for `example.com` was stored as text
+  - API: `/api/traffic` by container, project, and response text returned the HTTPS exchange with decrypted detail; the project query with path, method, and status filters returned 2 exchanges; another tenant received 404 for container, project, detail, evidence conversion, and clear, and 0 unscoped rows; the exchange converted into `http_exchange` evidence
+  - Control proxy: `/ca.crt` returned the in-container CA with the token and 401 without it
+  - Burst: 650 concurrent requests in about 1 s were all received by the target and all persisted by the periodic pull
+  - Restart: the CA fingerprint was unchanged, HTTPS still verified, and an exchange captured after the restart was persisted
+  - Clear: the project clear left 0 rows and an empty proxy buffer
+  - Logs: no supervised program crashed; a probe with a 0.2 s pull interval over two start/stop cycles logged pull failures only while the container was stopping

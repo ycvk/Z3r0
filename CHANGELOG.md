@@ -2,6 +2,25 @@
 
 All notable changes to Z3r0 are documented in this file.
 
+## [0.3.1] - 2026-11-19
+
+### Added
+
+- Added Traffic and Credentials views to the work project workspace: project-scoped HTTP/HTTPS exchange search with path, method, and status filters, request and response detail, and clearing, plus project credential management with masked secrets, reveal, copy, and delete (`/api/work-projects/{id}/credentials`).
+- Added one-click conversion of a captured exchange into immutable `http_exchange` evidence on a work item (`POST /api/work-projects/{id}/traffic/{traffic_id}/evidence`).
+- Added session token usage to the Playground session list and header for regular and project sessions.
+
+### Changed
+
+- Made sandbox container start wait for the control proxy and apply the egress policy before reporting the container as running; a container whose control proxy does not answer within 60 seconds is stopped and the start fails.
+- Limited the `Accept-Encoding` forwarded by `sandbox-proxy` to `gzip`, `deflate`, and `identity` so captured response bodies stay searchable text, and recorded an empty body for binary payloads and content codings it cannot decode. Rebuild the sandbox image and recreate existing containers to pick up the new proxy.
+
+### Fixed
+
+- Fixed traffic synchronization stalling for a container after a response body containing NUL bytes.
+- Fixed exchanges captured after a sandbox container or proxy restart being skipped; the synchronization cursor follows the proxy boot id.
+- Fixed the egress policy not being re-applied on container start while the control proxy was still coming up.
+
 ## [0.3.0] - 2026-11-19
 
 ### Added
