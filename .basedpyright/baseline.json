@@ -306,24 +306,6 @@
                 }
             }
         ],
-        "./core/flow/controller.py": [
-            {
-                "code": "reportOptionalMemberAccess",
-                "range": {
-                    "startColumn": 121,
-                    "endColumn": 129,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 23,
-                    "endColumn": 30,
-                    "lineCount": 1
-                }
-            }
-        ],
         "./core/lightrag/runtime.py": [
             {
                 "code": "reportGeneralTypeIssues",
@@ -2796,6 +2778,24 @@
                 "range": {
                     "startColumn": 42,
                     "endColumn": 47,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./service/flow/controller.py": [
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 121,
+                    "endColumn": 129,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 23,
+                    "endColumn": 30,
                     "lineCount": 1
                 }
             }

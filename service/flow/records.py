@@ -193,7 +193,7 @@ async def create_flow(request: CreateFlowRequest, user: AuthUser) -> FlowSchema:
         )
         raise
     logger.info("flow created: public_id=%s session=%s", public_id, session_id)
-    from core.flow.controller import schedule_flow
+    from service.flow.controller import schedule_flow
     schedule_flow(public_id)
     return await _schema_for(flow)
 
@@ -243,7 +243,7 @@ async def cancel_flow(public_id: str, user: AuthUser) -> FlowSchema | None:
         else:
             await session.refresh(flow)
         session_id = flow.session_id
-    from core.flow.controller import cancel_scheduled_flow
+    from service.flow.controller import cancel_scheduled_flow
     await cancel_scheduled_flow(public_id)
     clear_session_guard(session_id)
     await cancel_session_subagents(session_id)
@@ -261,7 +261,7 @@ async def answer_flow_input(public_id: str, user: AuthUser, text: str) -> FlowSc
         return None
     if flow.status != FlowStatus.WAITING:
         raise FlowValidationError("flow is not waiting")
-    from core.flow.controller import submit_flow_input
+    from service.flow.controller import submit_flow_input
     await submit_flow_input(public_id, text)
     return await get_flow(public_id, user)
 

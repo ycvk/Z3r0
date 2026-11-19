@@ -12,7 +12,6 @@ from config import ROOT_PATH, get_config
 
 from core.agent.registry import AgentRegistry
 from core.delegation.subagents import start_subagent_runtime, stop_subagent_runtime
-from core.flow.controller import start_flow_runtime, stop_flow_runtime
 from core.lightrag.runtime import start_lightrag, stop_lightrag
 from core.runtime.session import AgentSessionPool, get_agent_pool, install_agent_pool
 from core.sandbox.command_jobs import start_async_sandbox_runtime, stop_async_sandbox_commands
@@ -41,6 +40,7 @@ from router.work_project.records import router as work_project_records_router
 from schema.system_user.users import SystemUserRole
 from service.agent.recovery import recover_pending_sessions
 from service.agent.reports import start_report_cleanup_runtime, stop_report_cleanup_runtime
+from service.flow.controller import start_flow_runtime, stop_flow_runtime
 from service.host.hosts import ensure_local_managed_host
 from service.knowledge.runtime import (
     start_knowledge_document_runtime,

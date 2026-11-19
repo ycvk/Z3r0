@@ -24,7 +24,7 @@ migration tool, lock file, or CI, so structural changes could not be verified.
 - `tools/catalog.py` declares which tools each agent mounts. `core` receives
   that catalog from `app.py` and reads tool behaviour from `ToolMount` fields,
   so it never imports a tool.
-- `lint-imports` enforces the order. The 23 existing `core` -> `service`
+- `lint-imports` enforces the order. The 18 existing `core` -> `service`
   imports are listed under `ignore_imports`; the list only shrinks, and a
   stale entry fails the check.
 - `basedpyright` runs in `basic` mode against `.basedpyright/baseline.json`;
@@ -49,8 +49,8 @@ migration tool, lock file, or CI, so structural changes could not be verified.
 ## Evidence
 
 2026-11-19, local: `uv run ruff check`, `uv run lint-imports` (1 contract kept,
-23 ignored imports), `uv run basedpyright` (0 new errors, 661 in baseline),
-`uv run pytest` (16 passed), `go vet` and `go test -race` in `sandbox/proxy`,
+18 ignored imports), `uv run basedpyright` (0 new errors, 661 in baseline),
+`uv run pytest` (17 passed), `go vet` and `go test -race` in `sandbox/proxy`,
 API contract export with no diff, both frontend builds, an application image
 build that booted against an empty database at revision `0001`, and adoption
 of a copy of the development database with models in sync.
