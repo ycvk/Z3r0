@@ -37,11 +37,14 @@ def _end_turn_after_dispatch(dispatch_tool_names: frozenset[str]) -> _ToolUseBeh
         _ctx: RunContextWrapper[AgentRuntimeContext],
         results: list[FunctionToolResult],
     ) -> ToolsToFinalOutputResult:
-        """End the turn the moment an async command is successfully dispatched.
+        """End the turn the moment a tool hands control to something outside it.
 
         Dispatching background work is turn-terminal: the agent stops here and is
         woken by the completion notification, so it can never poll for the result.
-        A failed dispatch is not terminal, letting the agent react in the same turn.
+        A Flow signal is turn-terminal too: the controller reads one signal per turn,
+        so the agent must not go on and replace it with another.
+        A failed dispatch or a rejected signal is not terminal, letting the agent react
+        in the same turn.
         """
         for result in results:
             if getattr(result.tool, "name", None) not in dispatch_tool_names:
@@ -53,7 +56,7 @@ def _end_turn_after_dispatch(dispatch_tool_names: frozenset[str]) -> _ToolUseBeh
             except (TypeError, ValueError):
                 status = None
                 barrier = None
-            if status == SandboxAsyncJobStatus.RUNNING.value or barrier == "ask":
+            if status == SandboxAsyncJobStatus.RUNNING.value or barrier:
                 return ToolsToFinalOutputResult(is_final_output=True, final_output=result.output)
         return ToolsToFinalOutputResult(is_final_output=False)
 

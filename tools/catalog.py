@@ -132,10 +132,11 @@ FLOW_SANDBOX_TOOLS = (
 
 FLOW_CONTROL_TOOLS = (
     ToolMount(web_search),
-    ToolMount(submit_subtask_list),
-    ToolMount(patch_subtask_list),
-    ToolMount(done),
-    ToolMount(ask),
+    # Each of these sets the one signal the Flow controller reads after the turn.
+    ToolMount(submit_subtask_list, ends_turn_on_dispatch=True),
+    ToolMount(patch_subtask_list, ends_turn_on_dispatch=True),
+    ToolMount(done, ends_turn_on_dispatch=True),
+    ToolMount(ask, ends_turn_on_dispatch=True),
     ToolMount(export_report, exports_reports=True),
 )
 

@@ -8,7 +8,9 @@ from httpx import ASGITransport, AsyncClient
 from sqlmodel import col, select
 
 from app import create_app
+from config import ModelApi
 from core.errors import ValidationError
+from core.runtime.session import get_agent_pool
 from core.sandbox import command_guard
 from database import get_async_session
 from middleware.system_user import AuthUser
@@ -26,11 +28,12 @@ from schema.system_user.users import SystemUserRole
 from service.agent import sessions as agent_sessions
 from service.flow import controller as flow_controller
 from service.flow import records as flow_records
-from service.flow.runs import flow_run_is_active
+from service.flow.runs import flow_run_is_active, forget_flow_run
 from service.sandbox import lifecycle
 from service.system_user.users import delete_system_user
 from service.work_project.projects import delete_work_project
 from tests.conftest import auth_headers
+from tests.model_stubs import model_stub, openai_chat_tool_call_stream, text_stream, use_stub_for_default_agent
 
 
 @dataclass
@@ -82,6 +85,7 @@ async def _start_flow(
     *,
     in_project: bool = False,
     status: FlowStatus = FlowStatus.COMPLETED,
+    planned: bool = True,
 ) -> str:
     project_id = world.project_id if in_project else None
     session_id = await agent_sessions.create_session(
@@ -101,8 +105,9 @@ async def _start_flow(
         session.add(flow)
         await session.commit()
         await session.refresh(flow)
-        session.add(FlowSubtask(flow_id=flow.id or 0, title="step", status=FlowSubtaskStatus.RUNNING))
-        await session.commit()
+        if planned:
+            session.add(FlowSubtask(flow_id=flow.id or 0, title="step", status=FlowSubtaskStatus.RUNNING))
+            await session.commit()
     return session_id
 
 
@@ -265,3 +270,49 @@ async def test_a_waiting_flow_resumes_after_a_restart_with_the_answer_and_the_ap
     # The approval given before the restart lets the exact command run once.
     assert await command_guard.check_command_guard(dangerous, session_id=session_id) is None
     assert await command_guard.check_command_guard(dangerous, session_id=session_id) is not None
+
+
+@pytest.mark.asyncio
+async def test_each_flow_signal_ends_its_turn_so_the_controller_reads_the_one_it_asked_for(
+    test_db: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    world = await _seed()
+    await _start_flow(world, world.alice, "fresh", status=FlowStatus.QUEUED, planned=False)
+    finished = asyncio.Event()
+
+    def forget_and_signal(public_id: str) -> None:
+        forget_flow_run(public_id)
+        finished.set()
+
+    monkeypatch.setattr(flow_controller, "forget_flow_run", forget_and_signal)
+
+    async with model_stub(ModelApi.OPENAI_COMPLETIONS) as stub:
+        # One response per turn. A model that kept going after a signal would take the next
+        # response in the same turn and replace the signal the controller is waiting for.
+        stub.script(
+            openai_chat_tool_call_stream("submit_subtask_list", {"items": [
+                {"title": "Find the flag", "description": "Search the fixture."},
+            ]}),
+            openai_chat_tool_call_stream("done", {"summary": "Found FLAG{stub} in token.txt."}),
+            openai_chat_tool_call_stream("patch_subtask_list", {"ops": []}),
+            openai_chat_tool_call_stream("export_report", {"content": "# Report\n\nFLAG{stub}"}),
+            text_stream(stub.api, "Report exported.", input_tokens=10, output_tokens=5),
+        )
+        use_stub_for_default_agent(stub)
+        await flow_controller.start_flow_runtime()
+        try:
+            await asyncio.wait_for(finished.wait(), timeout=60)
+        finally:
+            await flow_controller.stop_flow_runtime()
+            await get_agent_pool().stop()
+
+    flow = (await _flows())["fresh"]
+    assert (flow.status, flow.error) == (FlowStatus.COMPLETED, "")
+    assert flow.report_id
+    schema = await flow_records.load_flow_schema("fresh")
+    assert schema is not None
+    assert [(item.title, item.status, item.summary) for item in schema.subtasks] == [
+        ("Find the flag", FlowSubtaskStatus.DONE, "Found FLAG{stub} in token.txt."),
+    ]
+    assert len(stub.requests) == 5

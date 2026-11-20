@@ -145,6 +145,19 @@ def openai_chat_stream(*chunks: dict[str, Any]) -> bytes:
     return b"".join([*lines, b"data: [DONE]\n\n"])
 
 
+def openai_chat_tool_call_stream(name: str, arguments: dict[str, Any]) -> bytes:
+    """A complete Chat Completions response that calls one tool."""
+    call = {"index": 0, "id": f"call_{name}", "type": "function", "function": {
+        "name": name,
+        "arguments": json.dumps(arguments),
+    }}
+    return openai_chat_stream(
+        {"choices": [{"index": 0, "delta": {"role": "assistant", "tool_calls": [call]}}]},
+        {"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]},
+        {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}},
+    )
+
+
 def openai_responses_stream(text: str, *, input_tokens: int, output_tokens: int) -> bytes:
     message = openai_responses.ResponseOutputMessage(
         id="msg_stub",

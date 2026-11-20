@@ -20,6 +20,7 @@ All notable changes to Z3r0 are documented in this file.
 
 ### Fixed
 
+- Fixed Flows failing with "Flow planning did not produce a subtask list." when the model kept working after it submitted the plan. `submit_subtask_list`, `patch_subtask_list`, `done`, and `ask` now end the turn they are called in, so the controller reads the signal it asked for.
 - Fixed a model that cannot be reached looking like a model that is thinking. Every failed model request is logged with its provider, model, attempt, and root cause, and the playground shows the failure while the runner retries. The error that ends a turn names the root cause, such as the TLS or connection failure behind "Connection error."
 - Fixed the application failing to start when the tiktoken encoding download failed. The application image now contains the encodings and starts without that download.
 

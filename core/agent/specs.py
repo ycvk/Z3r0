@@ -13,7 +13,8 @@ class ToolMount:
     runs_sandbox_commands: bool = False
     loads_sandbox_skills: bool = False
     exports_reports: bool = False
-    # A successful dispatch from this tool ends the turn; the completion notification wakes the agent.
+    # A successful dispatch from this tool ends the turn: a background command whose completion
+    # wakes the agent, or a Flow signal the controller acts on.
     ends_turn_on_dispatch: bool = False
 
 
