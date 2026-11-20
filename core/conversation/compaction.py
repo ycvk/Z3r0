@@ -7,19 +7,19 @@ import hashlib
 from dataclasses import dataclass
 from typing import Any
 
-import tiktoken
-from agents import Agent, ModelSettings, Runner, TResponseInputItem
+from agents import Agent, Runner, TResponseInputItem
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import AgentConfig, get_config
-from core.agent.models import build_model_retry_settings, build_openai_model
+from core.agent.models import build_model, build_model_settings
 from core.conversation.formats import (
     CONTEXT_SUMMARY_ITEM_ID,
     CONTEXT_SUMMARY_SECTIONS,
     format_context_summary,
 )
 from core.conversation.projection import ContextProjection, ProjectedItem, ProjectionCompaction
+from core.conversation.tokens import estimate_items_tokens, summary_safe_value
 from core.runtime.ports import runtime_ports
 from logger import get_logger
 from model.agent.context_compactions import AgentContextCompaction
@@ -57,15 +57,6 @@ class CompactionDecision:
     context_window: int
     trigger_tokens: int
     target_tokens: int
-
-
-def estimate_items_tokens(items: list[TResponseInputItem], model: str) -> int:
-    encoding = _encoding_for_model(model)
-    total = 0
-    for item in items:
-        total += 4
-        total += len(encoding.encode(json.dumps(_summary_safe_value(item), ensure_ascii=False, separators=(",", ":"))))
-    return total
 
 
 def estimate_projection_tokens(projection: ContextProjection, model: str) -> ContextProjection:
@@ -115,9 +106,9 @@ async def compact_if_needed(
     if context_window <= 0:
         return CompactionDecision(False, 0, context_window, 0, 0)
 
-    projection = estimate_projection_tokens(projection, agent_config.model)
+    projection = estimate_projection_tokens(projection, agent_config.model.id)
     projected_tokens = sum(item.token_estimate for item in projection.projected_items)
-    projected_tokens += estimate_items_tokens(incoming_items, agent_config.model)
+    projected_tokens += estimate_items_tokens(incoming_items, agent_config.model.id)
     trigger_tokens = int(context_window * cfg.context_compression_trigger_ratio)
     hard_stop_tokens = int(context_window * cfg.context_compression_hard_stop_ratio)
     target_tokens = int(context_window * cfg.context_compression_target_ratio)
@@ -127,7 +118,7 @@ async def compact_if_needed(
         projection.projected_items,
         target_tokens=target_tokens,
         projected_tokens=projected_tokens,
-        incoming_tokens=estimate_items_tokens(incoming_items, agent_config.model),
+        incoming_tokens=estimate_items_tokens(incoming_items, agent_config.model.id),
         summary_max_tokens=cfg.context_compression_summary_max_tokens,
     )
     compact_start_message_id = _candidate_start_message_id(candidate_items)
@@ -154,7 +145,7 @@ async def compact_if_needed(
         scope.viewer_agent_code,
         scope.nested_for,
         scope.nested_call_id,
-        agent_config.model,
+        agent_config.model.id,
         len(projection.items),
         len(candidate_items),
         projected_tokens,
@@ -204,7 +195,7 @@ async def compact_if_needed(
 
     summary_item = _summary_item(summary_text)
     source_tokens = candidate_tokens
-    summary_tokens = estimate_items_tokens([summary_item], agent_config.model)
+    summary_tokens = estimate_items_tokens([summary_item], agent_config.model.id)
     async with session_factory() as sess:
         if not await _try_lock_compaction(sess, scope):
             logger.debug(
@@ -225,7 +216,7 @@ async def compact_if_needed(
                 source_item_count=len(candidate_items),
                 source_token_estimate=source_tokens,
                 summary_token_estimate=summary_tokens,
-                model=agent_config.model,
+                model=agent_config.model.id,
             )
         finally:
             await _unlock_compaction(sess, scope)
@@ -367,18 +358,23 @@ async def _summarize_items(
     *,
     session_id: str = "",
 ) -> str:
-    cfg = get_config().agent_runtime
+    cfg = get_config()
+    # The summary is a plain completion: capped output, no thinking, provider-default sampling.
+    summary_model = agent_config.model.model_copy(update={
+        "max_tokens": cfg.agent_runtime.context_compression_summary_max_tokens,
+        "temperature": None,
+        "top_p": None,
+        "reasoning_effort": None,
+        "thinking_budget_tokens": None,
+    })
     agent = Agent(
         name="Context compressor",
-        model=build_openai_model(agent_config),
-        model_settings=ModelSettings(
-            max_tokens=cfg.context_compression_summary_max_tokens,
-            retry=build_model_retry_settings(),
-        ),
+        model=build_model(cfg.model_endpoint(summary_model), summary_model),
+        model_settings=build_model_settings(summary_model),
         instructions=_SUMMARY_AGENT_INSTRUCTIONS,
     )
     try:
-        payload = json.dumps(_summary_safe_value(items), ensure_ascii=False, indent=2)
+        payload = json.dumps(summary_safe_value(items), ensure_ascii=False, indent=2)
         result = await Runner.run(
             starting_agent=agent,
             input=(
@@ -412,43 +408,12 @@ def _summary_item(summary_text: str) -> TResponseInputItem:
     }
 
 
-def _summary_safe_value(value: Any) -> Any:
-    if isinstance(value, list):
-        return [_summary_safe_value(item) for item in value]
-    if not isinstance(value, dict):
-        return value
-    if value.get("type") == "input_image":
-        media_type = _image_media_type(value.get("image_url"))
-        return {
-            "type": "input_image",
-            "image_url": f"data:{media_type};base64,[omitted]",
-            "detail": value.get("detail") or "auto",
-            "note": "Image bytes omitted from context compaction prompt",
-        }
-    return {key: _summary_safe_value(item) for key, item in value.items()}
-
-
-def _image_media_type(image_url: Any) -> str:
-    if not isinstance(image_url, str) or not image_url.startswith("data:"):
-        return "image/*"
-    header = image_url.split(",", 1)[0]
-    media_type = header.removeprefix("data:").split(";", 1)[0]
-    return media_type or "image/*"
-
-
 def resolve_context_window(agent_config: AgentConfig) -> int:
-    return agent_config.context_window
+    return agent_config.model.context_window
 
 
 def _one_line_error(exc: Exception) -> str:
     return " ".join(str(exc).split())[:500]
-
-
-def _encoding_for_model(model: str):
-    try:
-        return tiktoken.encoding_for_model(model.split("/", 1)[-1])
-    except Exception:
-        return tiktoken.get_encoding("cl100k_base")
 
 
 def _advisory_lock_key(scope: CompactionScope) -> int:

@@ -19,6 +19,7 @@ node_modules
 .z3r0/app.log.*
 .z3r0/tiktoken_cache
 .z3r0/config.json
+.z3r0/model_catalog.json
 
 web/node_modules
 web/dist

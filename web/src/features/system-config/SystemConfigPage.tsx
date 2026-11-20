@@ -1,29 +1,48 @@
-import { Button, Input, InputNumber, Switch, TextArea } from "../../shared/ui/semi";
-import { Bot, DatabaseZap, Globe2, RotateCcw, Save, Settings, X } from "lucide-react";
+import { Button, TextArea } from "../../shared/ui/semi";
+import { Bot, Boxes, ChevronDown, ChevronUp, CopyCheck, DatabaseZap, Globe2, RefreshCw, RotateCcw, Save, Settings, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getInstanceConfig, updateInstanceConfig } from "../../shared/api/systemConfig";
+import { getModelCatalog, refreshModelCatalog } from "../../shared/api/modelCatalog";
 import { showApiError, showApiSuccess } from "../../shared/api/feedback";
-import { SYSTEM_CONFIG_FIELD_CONSTRAINTS } from "../../shared/api/generated/constants";
+import { MODEL_API_VALUES, SYSTEM_CONFIG_FIELD_CONSTRAINTS } from "../../shared/api/generated/constants";
 import { MetricStrip } from "../../shared/components/ResourcePageShell";
 import { AsyncContent } from "../../shared/components/AsyncContent";
 import { cx } from "../../shared/lib/className";
 import type {
-  AgentConfig,
   AgentPoolConfig,
   AgentRuntimeConfig,
   FofaConfig,
   InstanceConfig,
   LightRAGConfig,
+  ModelApi,
+  ModelCatalog,
+  ModelRef,
   UpdateInstanceConfigRequest,
 } from "../../shared/api/types";
 import { useAdminResourceHeader } from "../../shared/hooks/useAdminResourceHeader";
 import { useMountedRef } from "../../shared/hooks/useMountedRef";
+import { Field, type NumberFieldWidth } from "./ConfigField";
+import { ModelEditor, ModelSelect, protocolOptions, providerOptions } from "./ModelEditor";
+import { AddProviderButton, AddProviderModal, ProvidersEditor } from "./ProvidersEditor";
+import {
+  catalogChoices,
+  catalogChoicesKey,
+  extractionModelToPayload,
+  isOpenAIApi,
+  modelToForm,
+  modelToPayload,
+  providerToForm,
+  providerToPayload,
+  type ModelFormValue,
+  type ProviderFormValue,
+} from "./modelConfig";
 
-type AgentFormValue = AgentConfig;
-type LightRAGFormValue = LightRAGConfig;
+type AgentFormValue = { code: string; name: string; description: string; model: ModelFormValue };
+type LightRAGFormValue = Omit<LightRAGConfig, "llm"> & { llm: ModelRef };
 type FofaFormValue = FofaConfig;
 
 type ConfigFormValue = {
+  providers: ProviderFormValue[];
   agents: AgentFormValue[];
   agent_pool: AgentPoolConfig;
   agent_runtime: AgentRuntimeConfig;
@@ -34,8 +53,6 @@ type ConfigFormValue = {
 type FieldKey<T, Value> = {
   [Key in keyof T]: T[Key] extends Value ? Key : never;
 }[keyof T];
-
-type NumberFieldWidth = "compact" | "standard" | "wide" | "fill";
 
 type ConfigField<T> = {
   key: FieldKey<T, number>;
@@ -51,13 +68,7 @@ type ConfigFieldGroup<T> = {
   fields: ConfigField<T>[];
 };
 
-type AgentTextField = {
-  key: keyof Pick<AgentConfig, "name" | "base_url" | "model" | "api_key">;
-  label: string;
-  maxLength?: number;
-  password?: boolean;
-};
-
+const OPENAI_APIS = MODEL_API_VALUES.filter(isOpenAIApi);
 const AGENT_CONSTRAINTS = SYSTEM_CONFIG_FIELD_CONSTRAINTS.AgentConfig;
 const POOL_CONSTRAINTS = SYSTEM_CONFIG_FIELD_CONSTRAINTS.AgentPoolConfig;
 const RUNTIME_CONSTRAINTS = SYSTEM_CONFIG_FIELD_CONSTRAINTS.AgentRuntimeConfig;
@@ -103,13 +114,6 @@ const POOL_FIELDS: ConfigField<AgentPoolConfig>[] = [
   { key: "sweep_interval_seconds", label: "Sweep interval seconds", min: POOL_CONSTRAINTS.sweep_interval_seconds.minimum, width: "compact" },
 ];
 
-const AGENT_TEXT_FIELDS: AgentTextField[] = [
-  { key: "name", label: "Name", maxLength: AGENT_CONSTRAINTS.name.maxLength },
-  { key: "model", label: "Model" },
-  { key: "base_url", label: "Base URL" },
-  { key: "api_key", label: "API key", password: true },
-];
-
 function ratioField(
   key: FieldKey<AgentRuntimeConfig, number>,
   label: string,
@@ -129,45 +133,56 @@ function ratioField(
 }
 
 function toFormValue(config: InstanceConfig): ConfigFormValue {
-  if (!config.agent_pool || !config.agent_runtime || !config.lightrag || !config.fofa) {
+  if (!config.agent_pool || !config.agent_runtime || !config.lightrag?.llm || !config.fofa) {
     throw new Error("Instance config is incomplete");
   }
-  const agents = Object.values(config.agents ?? {}).map((agent) => ({ ...agent }));
   return {
-    agents,
+    providers: Object.entries(config.providers ?? {}).map(([id, provider]) => providerToForm(id, provider)),
+    agents: Object.values(config.agents ?? {}).map((agent) => ({
+      code: agent.code,
+      name: agent.name,
+      description: agent.description,
+      model: modelToForm(agent.model),
+    })),
     agent_pool: { ...config.agent_pool },
     agent_runtime: { ...config.agent_runtime },
-    lightrag: { ...config.lightrag },
+    lightrag: { ...config.lightrag, llm: { ...config.lightrag.llm } },
     fofa: { ...config.fofa },
   };
 }
 
 function cloneFormValue(values: ConfigFormValue): ConfigFormValue {
   return {
-    agents: values.agents.map((agent) => ({ ...agent })),
+    providers: values.providers.map((provider) => ({
+      ...provider,
+      endpoints: provider.endpoints.map((endpoint) => ({ ...endpoint })),
+    })),
+    agents: values.agents.map((agent) => ({ ...agent, model: { ...agent.model } })),
     agent_pool: { ...values.agent_pool },
     agent_runtime: { ...values.agent_runtime },
-    lightrag: { ...values.lightrag },
+    lightrag: { ...values.lightrag, llm: { ...values.lightrag.llm } },
     fofa: { ...values.fofa },
   };
 }
 
+/** Build the update request; throws an Error naming the first field that cannot be saved. */
 function toPayload(values: ConfigFormValue): UpdateInstanceConfigRequest {
-  const agents: NonNullable<UpdateInstanceConfigRequest["agents"]> = {};
+  const providers: UpdateInstanceConfigRequest["providers"] = {};
+  values.providers.forEach((provider) => {
+    providers[provider.id] = providerToPayload(provider);
+  });
+  const agents: UpdateInstanceConfigRequest["agents"] = {};
   values.agents.forEach((agent) => {
-    const code = agent.code.trim();
-    if (!code) return;
-    agents[code] = {
-      name: agent.name.trim(),
+    const name = agent.name.trim();
+    if (!name) throw new Error(`Agent ${agent.code} needs a name`);
+    agents[agent.code] = {
+      name,
       description: agent.description.trim(),
-      base_url: agent.base_url.trim(),
-      api_key: agent.api_key.trim(),
-      model: agent.model.trim(),
-      use_responses: agent.use_responses,
-      context_window: agent.context_window,
+      model: modelToPayload(agent.model, `Agent ${name}`, values.providers),
     };
   });
   return {
+    providers,
     agents,
     agent_pool: values.agent_pool,
     agent_runtime: values.agent_runtime,
@@ -176,9 +191,7 @@ function toPayload(values: ConfigFormValue): UpdateInstanceConfigRequest {
       embedding_api: values.lightrag.embedding_api.trim(),
       embedding_key: values.lightrag.embedding_key.trim(),
       embedding_model: values.lightrag.embedding_model.trim(),
-      llm_api: values.lightrag.llm_api.trim(),
-      llm_key: values.lightrag.llm_key.trim(),
-      llm_model: values.lightrag.llm_model.trim(),
+      llm: extractionModelToPayload(values.lightrag.llm, values.providers),
     },
     fofa: {
       ...values.fofa,
@@ -191,8 +204,11 @@ function toPayload(values: ConfigFormValue): UpdateInstanceConfigRequest {
 export function SystemConfigPage() {
   const [values, setValues] = useState<ConfigFormValue | null>(null);
   const [savedValues, setSavedValues] = useState<ConfigFormValue | null>(null);
+  const [catalog, setCatalog] = useState<ModelCatalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [refreshingCatalog, setRefreshingCatalog] = useState(false);
+  const [addingProvider, setAddingProvider] = useState(false);
   const mountedRef = useMountedRef();
   const loadRequestIdRef = useRef(0);
   const saveRequestIdRef = useRef(0);
@@ -211,11 +227,12 @@ export function SystemConfigPage() {
     loadRequestIdRef.current = requestId;
     setLoading(true);
     try {
-      const response = await getInstanceConfig();
+      const [response, catalogResponse] = await Promise.all([getInstanceConfig(), getModelCatalog()]);
       if (mountedRef.current && loadRequestIdRef.current === requestId && response.data) {
         const nextValues = toFormValue(response.data);
         setValues(nextValues);
         setSavedValues(cloneFormValue(nextValues));
+        setCatalog(catalogResponse.data ?? null);
       }
     } catch (error) {
       if (mountedRef.current && loadRequestIdRef.current === requestId) showApiError(error);
@@ -232,6 +249,7 @@ export function SystemConfigPage() {
     const agentCount = values?.agents.length ?? 0;
     return [
       { label: "Agents", value: agentCount },
+      { label: "Providers", value: values?.providers.length ?? "-" },
       { label: "Pool size", value: values?.agent_pool.max_size ?? "-" },
       { label: "Main turns", value: values?.agent_runtime.main_max_turns ?? "-" },
       {
@@ -257,12 +275,37 @@ export function SystemConfigPage() {
     setValues((current) => current && { ...current, fofa: { ...current.fofa, ...patch } });
   };
 
-  const updateAgent = (code: string, patch: Partial<AgentConfig>) => {
+  const updateProviders = (providers: ProviderFormValue[]) => {
+    setValues((current) => current && { ...current, providers });
+  };
+
+  const updateAgent = (code: string, patch: Partial<AgentFormValue>) => {
     setValues((current) => current && {
       ...current,
       agents: current.agents.map((agent) => (agent.code === code ? { ...agent, ...patch } : agent)),
     });
   };
+
+  const applyModelToAllAgents = (model: ModelFormValue) => {
+    setValues((current) => current && {
+      ...current,
+      agents: current.agents.map((agent) => ({ ...agent, model: { ...model } })),
+    });
+  };
+
+  const handleRefreshCatalog = useCallback(async () => {
+    setRefreshingCatalog(true);
+    try {
+      const response = await refreshModelCatalog();
+      if (!mountedRef.current) return;
+      setCatalog(response.data ?? null);
+      showApiSuccess(response);
+    } catch (error) {
+      if (mountedRef.current) showApiError(error);
+    } finally {
+      if (mountedRef.current) setRefreshingCatalog(false);
+    }
+  }, []);
 
   const handleCancel = useCallback(() => {
     if (savedValues) setValues(cloneFormValue(savedValues));
@@ -271,12 +314,20 @@ export function SystemConfigPage() {
   const handleSave = useCallback(async () => {
     if (!values || savingRef.current) return;
 
+    let payload: UpdateInstanceConfigRequest;
+    try {
+      payload = toPayload(values);
+    } catch (error) {
+      showApiError(error);
+      return;
+    }
+
     savingRef.current = true;
     const requestId = saveRequestIdRef.current + 1;
     saveRequestIdRef.current = requestId;
     setSaving(true);
     try {
-      const response = await updateInstanceConfig(toPayload(values));
+      const response = await updateInstanceConfig(payload);
       if (!mountedRef.current || saveRequestIdRef.current !== requestId) return;
       showApiSuccess(response);
       if (response.data?.config) {
@@ -326,6 +377,42 @@ export function SystemConfigPage() {
         >
           {values ? (
             <div className="system-config-layout">
+              <ConfigPanel
+                icon={<Boxes size={18} />}
+                title="Model providers"
+                actions={(
+                  <>
+                    {catalog ? (
+                      <span className="config-panel-note">
+                        Catalog {catalog.source.package}@{catalog.source.version}
+                      </span>
+                    ) : null}
+                    <Button icon={<RefreshCw size={14} />} size="small" type="tertiary" loading={refreshingCatalog}
+                      onClick={handleRefreshCatalog}>
+                      Update catalog
+                    </Button>
+                    <AddProviderButton onClick={() => setAddingProvider(true)} />
+                  </>
+                )}
+              >
+                <ProvidersEditor providers={values.providers} onChange={updateProviders} />
+              </ConfigPanel>
+
+              <ConfigPanel icon={<Bot size={18} />} title="Agents">
+                <div className="agent-config-list">
+                  {values.agents.map((agent) => (
+                    <AgentConfigEditor
+                      key={agent.code}
+                      agent={agent}
+                      providers={values.providers}
+                      catalog={catalog}
+                      onChange={(patch) => updateAgent(agent.code, patch)}
+                      onApplyToAll={() => applyModelToAllAgents(agent.model)}
+                    />
+                  ))}
+                </div>
+              </ConfigPanel>
+
               <ConfigPanel icon={<Settings size={18} />} title="Runtime">
                 <RuntimeConfigEditor value={values.agent_runtime} onChange={updateRuntime} />
               </ConfigPanel>
@@ -335,28 +422,28 @@ export function SystemConfigPage() {
               </ConfigPanel>
 
               <ConfigPanel icon={<DatabaseZap size={18} />} title="LightRAG">
-                <LightRAGConfigEditor value={values.lightrag} onChange={updateLightRAG} />
+                <LightRAGConfigEditor value={values.lightrag} providers={values.providers} catalog={catalog}
+                  onChange={updateLightRAG} />
               </ConfigPanel>
 
               <ConfigPanel icon={<Globe2 size={18} />} title="FOFA asset search">
                 <FofaConfigEditor value={values.fofa} onChange={updateFofa} />
               </ConfigPanel>
-
-              <ConfigPanel icon={<Bot size={18} />} title="Agents">
-                <div className="agent-config-list">
-                  {values.agents.map((agent) => (
-                    <AgentConfigEditor
-                      key={agent.code}
-                      agent={agent}
-                      onChange={(patch) => updateAgent(agent.code, patch)}
-                    />
-                  ))}
-                </div>
-              </ConfigPanel>
             </div>
           ) : null}
         </AsyncContent>
       </div>
+
+      <AddProviderModal
+        open={addingProvider}
+        catalog={catalog}
+        existingIds={values?.providers.map((provider) => provider.id) ?? []}
+        onCancel={() => setAddingProvider(false)}
+        onAdd={(provider) => {
+          if (values) updateProviders([...values.providers, provider]);
+          setAddingProvider(false);
+        }}
+      />
     </section>
   );
 }
@@ -377,10 +464,19 @@ function RuntimeConfigEditor({ value, onChange }: {
   );
 }
 
-function LightRAGConfigEditor({ value, onChange }: {
+function LightRAGConfigEditor({ value, providers, catalog, onChange }: {
   value: LightRAGFormValue;
+  providers: ProviderFormValue[];
+  catalog: ModelCatalog | null;
   onChange: (patch: Partial<LightRAGFormValue>) => void;
 }) {
+  // LightRAG talks Chat Completions, so its model sits on an OpenAI protocol endpoint.
+  const llmProviders = providers.filter((provider) => provider.endpoints.some((endpoint) => isOpenAIApi(endpoint.api)));
+  const llmProvider = llmProviders.find((provider) => provider.id === value.llm.provider);
+  const choices = useMemo(() => catalogChoices(catalog, llmProvider, OPENAI_APIS), [catalog, llmProvider]);
+  const ownCatalog = Boolean(catalog?.providers.some((provider) => provider.id === value.llm.provider));
+  const updateLlm = (patch: Partial<ModelRef>) => onChange({ llm: { ...value.llm, ...patch } });
+
   return (
     <div className="config-grid lightrag-config-grid">
       <Field kind="text" label="Embedding API" value={value.embedding_api}
@@ -393,12 +489,30 @@ function LightRAGConfigEditor({ value, onChange }: {
         width="fill"
         min={LIGHTRAG_CONSTRAINTS.embedding_dim.minimum} max={LIGHTRAG_CONSTRAINTS.embedding_dim.maximum}
         onChange={(embedding_dim) => onChange({ embedding_dim })} />
-      <Field kind="text" label="Extraction LLM API" value={value.llm_api}
-        onChange={(llm_api) => onChange({ llm_api })} />
-      <Field kind="text" label="Extraction LLM key" value={value.llm_key} password
-        onChange={(llm_key) => onChange({ llm_key })} />
-      <Field kind="text" label="Extraction LLM model" value={value.llm_model}
-        onChange={(llm_model) => onChange({ llm_model })} />
+      <Field kind="select" label="Extraction LLM provider" value={llmProvider ? value.llm.provider : null}
+        options={providerOptions(llmProviders)} placeholder="Choose a provider"
+        onChange={(providerId) => {
+          const next = llmProviders.find((provider) => provider.id === providerId);
+          if (!next) return;
+          const api = next.endpoints.find((endpoint) => endpoint.api === value.llm.api)?.api
+            ?? next.endpoints.find((endpoint) => isOpenAIApi(endpoint.api))?.api;
+          if (api) updateLlm({ provider: next.id, api });
+        }} />
+      <Field kind="select" label="Extraction LLM protocol" value={value.llm.api}
+        options={protocolOptions(llmProvider, OPENAI_APIS)}
+        onChange={(api) => api && updateLlm({ api: api as ModelApi })} />
+      <label className="field">
+        <span>Extraction LLM model</span>
+        <ModelSelect
+          api={value.llm.api}
+          id={value.llm.id}
+          choices={choices}
+          choicesKey={catalogChoicesKey(catalog, llmProvider)}
+          labelSource={!ownCatalog}
+          onSelectCatalog={(model) => updateLlm({ api: model.api, id: model.id })}
+          onSelectCustom={(id) => updateLlm({ id })}
+        />
+      </label>
       <div className="lightrag-retrieval-fields">
         <Field kind="number" label="Graph matches" value={value.graph_matches} width="fill"
           min={LIGHTRAG_CONSTRAINTS.graph_matches.minimum} max={LIGHTRAG_CONSTRAINTS.graph_matches.maximum}
@@ -428,7 +542,12 @@ function FofaConfigEditor({ value, onChange }: {
   );
 }
 
-function ConfigPanel({ children, icon, title }: { children: ReactNode; icon: ReactNode; title: string }) {
+function ConfigPanel({ actions, children, icon, title }: {
+  actions?: ReactNode;
+  children: ReactNode;
+  icon: ReactNode;
+  title: string;
+}) {
   return (
     <div className="config-panel">
       <div className="config-panel-header">
@@ -436,6 +555,7 @@ function ConfigPanel({ children, icon, title }: { children: ReactNode; icon: Rea
           {icon}
           <h2>{title}</h2>
         </div>
+        {actions ? <div className="config-panel-actions">{actions}</div> : null}
       </div>
       {children}
     </div>
@@ -467,80 +587,40 @@ function ConfigFieldGrid<T extends object>({ fill = false, fields, values, onCha
   );
 }
 
-function AgentConfigEditor({ agent, onChange }: {
+function AgentConfigEditor({ agent, providers, catalog, onChange, onApplyToAll }: {
   agent: AgentFormValue;
-  onChange: (patch: Partial<AgentConfig>) => void;
+  providers: ProviderFormValue[];
+  catalog: ModelCatalog | null;
+  onChange: (patch: Partial<AgentFormValue>) => void;
+  onApplyToAll: () => void;
 }) {
+  const [advanced, setAdvanced] = useState(false);
+
   return (
     <div className="agent-config-card">
       <div className="agent-config-card-header">
-        <strong>{agent.name || agent.code || "New agent"}</strong>
+        <strong>{agent.name || agent.code}</strong>
         <span>{agent.code}</span>
       </div>
       <div className="agent-form-grid">
-        {AGENT_TEXT_FIELDS.map((field) => (
-          <Field
-            key={field.key}
-            kind="text"
-            label={field.label}
-            value={agent[field.key]}
-            maxLength={field.maxLength}
-            password={field.password}
-            onChange={(value) => onChange({ [field.key]: value })}
-          />
-        ))}
-        <Field kind="number" label="Context window" value={agent.context_window} min={AGENT_CONSTRAINTS.context_window.minimum} width="wide"
-          onChange={(context_window) => onChange({ context_window })}
-        />
-        <Field kind="toggle" label="Use Responses API" value={agent.use_responses}
-          onChange={(use_responses) => onChange({ use_responses })}
-        />
+        <Field kind="text" label="Name" full value={agent.name} maxLength={AGENT_CONSTRAINTS.name.maxLength}
+          onChange={(name) => onChange({ name })} />
+        <ModelEditor model={agent.model} providers={providers} catalog={catalog} advanced={advanced}
+          onChange={(model) => onChange({ model })} />
         <label className="field full">
           <span>Description</span>
           <TextArea value={agent.description} autosize={{ minRows: 1, maxRows: 3 }} onChange={(description) => onChange({ description })} />
         </label>
+        <div className={cx("field", "full", "agent-config-actions")}>
+          <Button icon={advanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />} size="small" type="tertiary"
+            theme="borderless" onClick={() => setAdvanced((current) => !current)}>
+            {advanced ? "Hide advanced" : "Advanced"}
+          </Button>
+          <Button icon={<CopyCheck size={14} />} size="small" type="tertiary" theme="borderless" onClick={onApplyToAll}>
+            Use this model for every agent
+          </Button>
+        </div>
       </div>
     </div>
-  );
-}
-
-type FieldProps =
-  | { kind: "text"; label: string; value: string; maxLength?: number; password?: boolean; onChange: (value: string) => void }
-  | {
-      kind: "number";
-      label: string;
-      value: number;
-      min?: number;
-      max?: number;
-      step?: number;
-      width?: NumberFieldWidth;
-      onChange: (value: number) => void;
-    }
-  | { kind: "toggle"; label: string; value: boolean; onChange: (value: boolean) => void };
-
-function Field(props: FieldProps) {
-  const className = cx(
-    "field",
-    props.kind === "toggle" && "switch-field",
-    props.kind === "number" && "number-field",
-    props.kind === "number" && `number-field-${props.width ?? "standard"}`,
-  );
-  return (
-    <label className={className}>
-      <span>{props.label}</span>
-      {props.kind === "text" ? (
-        <Input type={props.password ? "password" : "text"} value={props.value} maxLength={props.maxLength} onChange={props.onChange} />
-      ) : props.kind === "number" ? (
-        <InputNumber
-          value={props.value}
-          min={props.min}
-          max={props.max}
-          step={props.step}
-          onChange={(next) => typeof next === "number" && props.onChange(next)}
-        />
-      ) : (
-        <Switch checked={props.value} onChange={props.onChange} aria-label={props.label} />
-      )}
-    </label>
   );
 }

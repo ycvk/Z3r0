@@ -555,6 +555,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/model-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Model Catalog Handler */
+        get: operations["get_model_catalog_handler_api_model_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/model-catalog/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Model Catalog Handler */
+        post: operations["refresh_model_catalog_handler_api_model_catalog_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sandbox-containers": {
         parameters: {
             query?: never;
@@ -1353,34 +1387,16 @@ export interface components {
     schemas: {
         /** AgentConfig */
         AgentConfig: {
-            /**
-             * Api Key
-             * @default
-             */
-            api_key: string;
-            /** Base Url */
-            base_url: string;
             /** Code */
             code: string;
-            /**
-             * Context Window
-             * @default 1000000
-             */
-            context_window: number;
             /**
              * Description
              * @default
              */
             description: string;
-            /** Model */
-            model: string;
+            model: components["schemas"]["ModelConfig"];
             /** Name */
             name: string;
-            /**
-             * Use Responses
-             * @default false
-             */
-            use_responses: boolean;
         };
         AgentEventSchema: components["schemas"]["UserMessageEvent"] | components["schemas"]["TurnBoundaryEvent"] | components["schemas"]["RunStateEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["TextCompleteEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["ThinkingCompleteEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["SubagentTaskEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
         /**
@@ -1727,6 +1743,68 @@ export interface components {
         Body_upload_knowledge_documents_route_api_knowledges_documents_post: {
             /** Files */
             files: string[];
+        };
+        /** CatalogModel */
+        CatalogModel: {
+            api: components["schemas"]["ModelApi"];
+            /** Base Url */
+            base_url: string;
+            /** Context Window */
+            context_window: number;
+            cost: components["schemas"]["CatalogModelCost"];
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+            /** Id */
+            id: string;
+            /** Image Input */
+            image_input: boolean;
+            /** Max Tokens */
+            max_tokens: number;
+            /** Name */
+            name: string;
+            /** Reasoning */
+            reasoning: boolean;
+            /** Reasoning Efforts */
+            reasoning_efforts: ("none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max")[];
+            /** Thinking Budget */
+            thinking_budget: boolean;
+        };
+        /**
+         * CatalogModelCost
+         * @description USD per million tokens.
+         */
+        CatalogModelCost: {
+            /** Cache Read */
+            cache_read: number;
+            /** Cache Write */
+            cache_write: number;
+            /** Input */
+            input: number;
+            /** Output */
+            output: number;
+        };
+        /** CatalogProvider */
+        CatalogProvider: {
+            /** Id */
+            id: string;
+            /** Models */
+            models: components["schemas"]["CatalogModel"][];
+            /** Name */
+            name: string;
+        };
+        /** CatalogSource */
+        CatalogSource: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Package */
+            package: string;
+            /** Version */
+            version: string;
         };
         /** ClearTrafficResponse */
         ClearTrafficResponse: {
@@ -2177,6 +2255,20 @@ export interface components {
              */
             code: number;
             data?: components["schemas"]["ManagedHostSchema"] | null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
+        /** CommonResponse[ModelCatalog] */
+        CommonResponse_ModelCatalog_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["ModelCatalog"] | null;
             /**
              * Message
              * @default success
@@ -3343,6 +3435,10 @@ export interface components {
             };
             fofa?: components["schemas"]["FofaConfig"];
             lightrag?: components["schemas"]["LightRAGConfig"];
+            /** Providers */
+            providers?: {
+                [key: string]: components["schemas"]["ProviderConfig"];
+            };
         };
         /** KnowledgeDocumentDetailSchema */
         KnowledgeDocumentDetailSchema: {
@@ -3576,21 +3672,7 @@ export interface components {
              * @default 5
              */
             graph_matches: number;
-            /**
-             * Llm Api
-             * @default https://api.openai.com/v1
-             */
-            llm_api: string;
-            /**
-             * Llm Key
-             * @default
-             */
-            llm_key: string;
-            /**
-             * Llm Model
-             * @default gpt-5
-             */
-            llm_model: string;
+            llm?: components["schemas"]["ModelRef"];
         };
         /** ListAgentEventsResponse */
         ListAgentEventsResponse: {
@@ -3724,6 +3806,71 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * ModelApi
+         * @enum {string}
+         */
+        ModelApi: "openai-completions" | "openai-responses" | "anthropic-messages" | "google-generative-ai";
+        /** ModelCatalog */
+        ModelCatalog: {
+            /** Providers */
+            providers: components["schemas"]["CatalogProvider"][];
+            source: components["schemas"]["CatalogSource"];
+        };
+        /** ModelConfig */
+        ModelConfig: {
+            api: components["schemas"]["ModelApi"];
+            /** Context Window */
+            context_window: number;
+            /** Extra Body */
+            extra_body?: {
+                [key: string]: unknown;
+            };
+            /** Extra Headers */
+            extra_headers?: {
+                [key: string]: string;
+            };
+            /** Id */
+            id: string;
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Provider */
+            provider: string;
+            /** Reasoning Effort */
+            reasoning_effort?: ("none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max") | null;
+            /** Temperature */
+            temperature?: number | null;
+            /** Thinking Budget Tokens */
+            thinking_budget_tokens?: number | null;
+            /** Top P */
+            top_p?: number | null;
+        };
+        /** ModelRef */
+        ModelRef: {
+            api: components["schemas"]["ModelApi"];
+            /** Id */
+            id: string;
+            /** Provider */
+            provider: string;
+        };
+        /** ProviderConfig */
+        ProviderConfig: {
+            /**
+             * Api Key
+             * @default
+             */
+            api_key: string;
+            /** Endpoints */
+            endpoints: {
+                [key: string]: string;
+            };
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+            /** Name */
+            name: string;
         };
         /** PullManagedHostImageResultSchema */
         PullManagedHostImageResultSchema: {
@@ -4686,20 +4833,11 @@ export interface components {
         };
         /** UpdateAgentConfigRequest */
         UpdateAgentConfigRequest: {
-            /** Api Key */
-            api_key: string;
-            /** Base Url */
-            base_url: string;
-            /** Context Window */
-            context_window: number;
             /** Description */
             description: string;
-            /** Model */
-            model: string;
+            model: components["schemas"]["ModelConfig"];
             /** Name */
             name: string;
-            /** Use Responses */
-            use_responses: boolean;
         };
         /** UpdateAgentSessionSandboxContainerRequest */
         UpdateAgentSessionSandboxContainerRequest: {
@@ -4733,6 +4871,10 @@ export interface components {
             };
             fofa: components["schemas"]["FofaConfig"];
             lightrag: components["schemas"]["LightRAGConfig"];
+            /** Providers */
+            providers: {
+                [key: string]: components["schemas"]["ProviderConfig"];
+            };
         };
         /** UpdateInstanceConfigResponse */
         UpdateInstanceConfigResponse: {
@@ -7794,6 +7936,109 @@ export interface operations {
             };
             /** @description Validation error */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    get_model_catalog_handler_api_model_catalog_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_ModelCatalog_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+        };
+    };
+    refresh_model_catalog_handler_api_model_catalog_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_ModelCatalog_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Upstream failure */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,11 +1,21 @@
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from config import AgentConfig, AgentPoolConfig, AgentRuntimeConfig, FofaConfig, LightRAGConfig
+from config import (
+    AgentConfig,
+    AgentPoolConfig,
+    AgentRuntimeConfig,
+    FofaConfig,
+    LightRAGConfig,
+    ModelConfig,
+    ProviderConfig,
+    ProviderId,
+)
 
 
 class InstanceConfigSchema(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
+    providers: dict[ProviderId, ProviderConfig] = Field(default_factory=dict)
     agents: dict[str, AgentConfig] = Field(default_factory=dict)
     agent_pool: AgentPoolConfig = Field(default_factory=AgentPoolConfig)
     agent_runtime: AgentRuntimeConfig = Field(default_factory=AgentRuntimeConfig)
@@ -23,18 +33,15 @@ class InstanceConfigSchema(BaseModel):
 class UpdateAgentConfigRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(max_length=128)
+    name: str = Field(min_length=1, max_length=128)
     description: str
-    base_url: str
-    api_key: str
-    model: str
-    use_responses: bool
-    context_window: int = Field(ge=0)
+    model: ModelConfig
 
 
 class UpdateInstanceConfigRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    providers: dict[ProviderId, ProviderConfig]
     agents: dict[str, UpdateAgentConfigRequest]
     agent_pool: AgentPoolConfig
     agent_runtime: AgentRuntimeConfig

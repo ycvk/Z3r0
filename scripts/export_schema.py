@@ -65,7 +65,15 @@ def export_frontend_contract_constants(schema: dict[str, Any]) -> Path:
     enum_constants = _enum_constants_ts(schema)
     config_constraints = _field_constraints(
         schema,
-        ("AgentConfig", "AgentPoolConfig", "AgentRuntimeConfig", "LightRAGConfig", "FofaConfig"),
+        (
+            "AgentConfig",
+            "AgentPoolConfig",
+            "AgentRuntimeConfig",
+            "FofaConfig",
+            "LightRAGConfig",
+            "ModelConfig",
+            "ProviderConfig",
+        ),
     )
 
     FRONTEND_CONTRACT_CONSTANTS_PATH.parent.mkdir(parents=True, exist_ok=True)

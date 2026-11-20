@@ -40,6 +40,7 @@ from router.flow.flows import router as flow_router
 from router.egress_proxy.proxies import router as egress_proxy_router
 from router.host.hosts import router as host_router
 from router.knowledge.resources import router as knowledge_router
+from router.model_catalog.catalog import router as model_catalog_router
 from router.sandbox.containers import router as sandbox_container_router
 from router.sandbox.images import router as sandbox_image_router
 from router.system_config.config import router as system_config_router
@@ -238,6 +239,7 @@ def create_app() -> FastAPI:
     app.include_router(agent_session_router, prefix=API_PREFIX)
     app.include_router(flow_router, prefix=API_PREFIX)
     app.include_router(system_config_router, prefix=API_PREFIX)
+    app.include_router(model_catalog_router, prefix=API_PREFIX)
     app.include_router(api_not_found_router, prefix=API_PREFIX)
     logger.debug("api router added")
 

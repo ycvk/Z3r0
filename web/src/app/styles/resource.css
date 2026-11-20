@@ -2152,3 +2152,70 @@
   content: "";
   opacity: 0.7;
 }
+
+.config-panel-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-panel-note,
+.config-empty {
+  color: var(--z-text-subtle);
+  font-size: 12px;
+}
+
+.config-empty {
+  margin: 0;
+  padding: 14px 16px;
+}
+
+.field .semi-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.field-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--z-text-subtle);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.field-hint-action {
+  padding: 0;
+  color: var(--z-accent);
+  font: inherit;
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.provider-endpoint-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.agent-config-card-header .semi-button {
+  flex: none;
+  margin-left: auto;
+}
+
+.agent-config-card {
+  align-content: start;
+}

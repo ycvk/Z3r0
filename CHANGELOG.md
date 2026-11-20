@@ -8,6 +8,15 @@ All notable changes to Z3r0 are documented in this file.
 
 - Added a fixed task set under `evals/` that runs as Flows against a running instance and a sandbox container and records pass or fail, duration, and token usage per task (`uv run python -m evals.run --help`).
 - Added retention for captured traffic. Entries older than `agent_runtime.traffic_retention_seconds` (7 days by default) are deleted, and each sandbox container keeps its newest `agent_runtime.traffic_max_entries_per_container` entries (50000 by default). Setting either to 0 turns that limit off. Both are editable on the system config page.
+- Added model providers. `providers` in `config.json` holds one API key, optional headers, and a base URL per protocol for each provider; agents and the LightRAG extraction model reference a provider instead of carrying their own URL and key.
+- Added the `anthropic-messages` and `google-generative-ai` protocols next to `openai-completions` and `openai-responses`. Anthropic and Gemini models run tool loops with thinking, prompt caching on Anthropic, and cached-token accounting.
+- Added per-model request parameters: `max_tokens`, `temperature`, `top_p`, `reasoning_effort`, `thinking_budget_tokens`, `extra_headers`, and `extra_body`. Each call lowers `max_tokens` to what the input leaves of the context window.
+- Added a model catalog built from the pi-ai model data (`GET /api/model-catalog`, `POST /api/model-catalog/refresh`, `scripts/update_model_catalog.py`). On the system config page, adding a provider from the catalog fills in its endpoints and selecting a model loads its protocol, context window, and output cap.
+
+### Changed
+
+- `config.json` has a new structure for models. `agents.*` replaces `base_url`, `api_key`, `model`, `use_responses`, and `context_window` with a `model` object; `lightrag` replaces `llm_api`, `llm_key`, and `llm_model` with `llm`; both reference an entry of the new `providers` map. A file in the previous structure does not load; `.z3r0/config.json.example` shows the new one.
+- `PATCH /api/system-config/instance` takes `providers` and a `model` object per agent, and answers 400 when a model references a provider or protocol endpoint that is not configured.
 
 ### Fixed
 

@@ -9,9 +9,10 @@ from agents import TResponseInputItem
 from agents.run import CallModelData, ModelInputData, RunConfig
 
 from config import AgentConfig, get_config
-from core.conversation.compaction import estimate_items_tokens, resolve_context_window
+from core.conversation.compaction import resolve_context_window
 from core.conversation.formats import is_context_summary_item
 from core.conversation.items import tool_call_id
+from core.conversation.tokens import estimate_items_tokens
 from logger import get_logger
 
 
@@ -74,7 +75,7 @@ def resolve_context_budget(agent_config: AgentConfig) -> ContextBudget | None:
     hard_budget = max(1, context_window - completion_slack)
     input_budget = max(1, min(ratio_budget, hard_budget))
     return ContextBudget(
-        model=agent_config.model,
+        model=agent_config.model.id,
         context_window=context_window,
         input_budget_tokens=input_budget,
     )

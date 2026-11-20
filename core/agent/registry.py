@@ -9,7 +9,6 @@ from agents import (
     Agent,
     FunctionToolResult,
     Model,
-    ModelSettings,
     RunContextWrapper,
     Tool,
     ToolsToFinalOutputResult,
@@ -18,7 +17,7 @@ from agents import (
 from config import AgentConfig, WORKSPACE, get_config
 from core.agent.constants import DEFAULT_AGENT_CODE
 from core.agent.instructions import build_instructions
-from core.agent.models import build_model_retry_settings, build_openai_model
+from core.agent.models import build_model, build_model_settings
 from core.agent.specs import AgentSpec, ToolMount
 from core.agent.tool_snapshot import AgentToolSnapshot
 from core.delegation.subagents import build_subagent_tools
@@ -146,11 +145,8 @@ class AgentRegistry:
 
         return Agent(
             name=cfg.name,
-            model=build_openai_model(cfg),
-            model_settings=ModelSettings(
-                parallel_tool_calls=False,
-                retry=build_model_retry_settings(),
-            ),
+            model=build_model(get_config().model_endpoint(cfg.model), cfg.model),
+            model_settings=build_model_settings(cfg.model, parallel_tool_calls=False),
             instructions=lambda run_context, _: _assemble_instructions(
                 stable_prefix=instructions,
                 work_project_context=run_context.context.work_project_context,

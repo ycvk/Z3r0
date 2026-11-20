@@ -4,27 +4,11 @@
       "AgentConfig": {
         "additionalProperties": false,
         "properties": {
-          "api_key": {
-            "default": "",
-            "title": "Api Key",
-            "type": "string"
-          },
-          "base_url": {
-            "minLength": 1,
-            "title": "Base Url",
-            "type": "string"
-          },
           "code": {
             "maxLength": 64,
             "minLength": 1,
             "title": "Code",
             "type": "string"
-          },
-          "context_window": {
-            "default": 1000000,
-            "minimum": 0.0,
-            "title": "Context Window",
-            "type": "integer"
           },
           "description": {
             "default": "",
@@ -32,26 +16,18 @@
             "type": "string"
           },
           "model": {
-            "minLength": 1,
-            "title": "Model",
-            "type": "string"
+            "$ref": "#/components/schemas/ModelConfig"
           },
           "name": {
             "maxLength": 128,
             "minLength": 1,
             "title": "Name",
             "type": "string"
-          },
-          "use_responses": {
-            "default": false,
-            "title": "Use Responses",
-            "type": "boolean"
           }
         },
         "required": [
           "code",
           "name",
-          "base_url",
           "model"
         ],
         "title": "AgentConfig",
@@ -803,6 +779,182 @@
           "files"
         ],
         "title": "Body_upload_knowledge_documents_route_api_knowledges_documents_post",
+        "type": "object"
+      },
+      "CatalogModel": {
+        "additionalProperties": false,
+        "properties": {
+          "api": {
+            "$ref": "#/components/schemas/ModelApi"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "context_window": {
+            "minimum": 1.0,
+            "title": "Context Window",
+            "type": "integer"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/CatalogModelCost"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "image_input": {
+            "title": "Image Input",
+            "type": "boolean"
+          },
+          "max_tokens": {
+            "minimum": 1.0,
+            "title": "Max Tokens",
+            "type": "integer"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reasoning": {
+            "title": "Reasoning",
+            "type": "boolean"
+          },
+          "reasoning_efforts": {
+            "items": {
+              "enum": [
+                "none",
+                "minimal",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ],
+              "type": "string"
+            },
+            "title": "Reasoning Efforts",
+            "type": "array"
+          },
+          "thinking_budget": {
+            "title": "Thinking Budget",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "api",
+          "base_url",
+          "context_window",
+          "max_tokens",
+          "reasoning",
+          "reasoning_efforts",
+          "thinking_budget",
+          "image_input",
+          "cost"
+        ],
+        "title": "CatalogModel",
+        "type": "object"
+      },
+      "CatalogModelCost": {
+        "additionalProperties": false,
+        "description": "USD per million tokens.",
+        "properties": {
+          "cache_read": {
+            "minimum": 0.0,
+            "title": "Cache Read",
+            "type": "number"
+          },
+          "cache_write": {
+            "minimum": 0.0,
+            "title": "Cache Write",
+            "type": "number"
+          },
+          "input": {
+            "minimum": 0.0,
+            "title": "Input",
+            "type": "number"
+          },
+          "output": {
+            "minimum": 0.0,
+            "title": "Output",
+            "type": "number"
+          }
+        },
+        "required": [
+          "input",
+          "output",
+          "cache_read",
+          "cache_write"
+        ],
+        "title": "CatalogModelCost",
+        "type": "object"
+      },
+      "CatalogProvider": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogModel"
+            },
+            "minItems": 1,
+            "title": "Models",
+            "type": "array"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "models"
+        ],
+        "title": "CatalogProvider",
+        "type": "object"
+      },
+      "CatalogSource": {
+        "additionalProperties": false,
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "package": {
+            "minLength": 1,
+            "title": "Package",
+            "type": "string"
+          },
+          "version": {
+            "minLength": 1,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "package",
+          "version",
+          "generated_at"
+        ],
+        "title": "CatalogSource",
         "type": "object"
       },
       "ClearTrafficResponse": {
@@ -1641,6 +1793,32 @@
           }
         },
         "title": "CommonResponse[ManagedHostSchema]",
+        "type": "object"
+      },
+      "CommonResponse_ModelCatalog_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelCatalog"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[ModelCatalog]",
         "type": "object"
       },
       "CommonResponse_PullManagedHostImagesResponse_": {
@@ -3961,6 +4139,15 @@
           },
           "lightrag": {
             "$ref": "#/components/schemas/LightRAGConfig"
+          },
+          "providers": {
+            "patternProperties": {
+              "^[a-z0-9][a-z0-9._-]{0,63}$": {
+                "$ref": "#/components/schemas/ProviderConfig"
+              }
+            },
+            "title": "Providers",
+            "type": "object"
           }
         },
         "title": "InstanceConfigSchema",
@@ -4507,22 +4694,8 @@
             "title": "Graph Matches",
             "type": "integer"
           },
-          "llm_api": {
-            "default": "https://api.openai.com/v1",
-            "minLength": 1,
-            "title": "Llm Api",
-            "type": "string"
-          },
-          "llm_key": {
-            "default": "",
-            "title": "Llm Key",
-            "type": "string"
-          },
-          "llm_model": {
-            "default": "gpt-5",
-            "minLength": 1,
-            "title": "Llm Model",
-            "type": "string"
+          "llm": {
+            "$ref": "#/components/schemas/ModelRef"
           }
         },
         "title": "LightRAGConfig",
@@ -4902,6 +5075,215 @@
           "updated_at"
         ],
         "title": "ManagedHostSchema",
+        "type": "object"
+      },
+      "ModelApi": {
+        "enum": [
+          "openai-completions",
+          "openai-responses",
+          "anthropic-messages",
+          "google-generative-ai"
+        ],
+        "title": "ModelApi",
+        "type": "string"
+      },
+      "ModelCatalog": {
+        "additionalProperties": false,
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogProvider"
+            },
+            "title": "Providers",
+            "type": "array"
+          },
+          "source": {
+            "$ref": "#/components/schemas/CatalogSource"
+          }
+        },
+        "required": [
+          "source",
+          "providers"
+        ],
+        "title": "ModelCatalog",
+        "type": "object"
+      },
+      "ModelConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "api": {
+            "$ref": "#/components/schemas/ModelApi"
+          },
+          "context_window": {
+            "minimum": 0.0,
+            "title": "Context Window",
+            "type": "integer"
+          },
+          "extra_body": {
+            "additionalProperties": true,
+            "title": "Extra Body",
+            "type": "object"
+          },
+          "extra_headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Extra Headers",
+            "type": "object"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          },
+          "provider": {
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+            "title": "Provider",
+            "type": "string"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Effort"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "maximum": 2.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "thinking_budget_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking Budget Tokens"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P"
+          }
+        },
+        "required": [
+          "provider",
+          "api",
+          "id",
+          "context_window"
+        ],
+        "title": "ModelConfig",
+        "type": "object"
+      },
+      "ModelRef": {
+        "additionalProperties": false,
+        "properties": {
+          "api": {
+            "$ref": "#/components/schemas/ModelApi"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "provider": {
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "api",
+          "id"
+        ],
+        "title": "ModelRef",
+        "type": "object"
+      },
+      "ProviderConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "api_key": {
+            "default": "",
+            "title": "Api Key",
+            "type": "string"
+          },
+          "endpoints": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "minProperties": 1,
+            "propertyNames": {
+              "$ref": "#/components/schemas/ModelApi"
+            },
+            "title": "Endpoints",
+            "type": "object"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "endpoints"
+        ],
+        "title": "ProviderConfig",
         "type": "object"
       },
       "PullManagedHostImageResultSchema": {
@@ -6804,45 +7186,24 @@
       "UpdateAgentConfigRequest": {
         "additionalProperties": false,
         "properties": {
-          "api_key": {
-            "title": "Api Key",
-            "type": "string"
-          },
-          "base_url": {
-            "title": "Base Url",
-            "type": "string"
-          },
-          "context_window": {
-            "minimum": 0.0,
-            "title": "Context Window",
-            "type": "integer"
-          },
           "description": {
             "title": "Description",
             "type": "string"
           },
           "model": {
-            "title": "Model",
-            "type": "string"
+            "$ref": "#/components/schemas/ModelConfig"
           },
           "name": {
             "maxLength": 128,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
-          },
-          "use_responses": {
-            "title": "Use Responses",
-            "type": "boolean"
           }
         },
         "required": [
           "name",
           "description",
-          "base_url",
-          "api_key",
-          "model",
-          "use_responses",
-          "context_window"
+          "model"
         ],
         "title": "UpdateAgentConfigRequest",
         "type": "object"
@@ -6970,9 +7331,19 @@
           },
           "lightrag": {
             "$ref": "#/components/schemas/LightRAGConfig"
+          },
+          "providers": {
+            "patternProperties": {
+              "^[a-z0-9][a-z0-9._-]{0,63}$": {
+                "$ref": "#/components/schemas/ProviderConfig"
+              }
+            },
+            "title": "Providers",
+            "type": "object"
           }
         },
         "required": [
+          "providers",
           "agents",
           "agent_pool",
           "agent_runtime",
@@ -12200,6 +12571,128 @@
         "summary": "Get Knowledge Vector Route",
         "tags": [
           "knowledges"
+        ]
+      }
+    },
+    "/api/model-catalog": {
+      "get": {
+        "operationId": "get_model_catalog_handler_api_model_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_ModelCatalog_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation error"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "Get Model Catalog Handler",
+        "tags": [
+          "model-catalog"
+        ]
+      }
+    },
+    "/api/model-catalog/refresh": {
+      "post": {
+        "operationId": "refresh_model_catalog_handler_api_model_catalog_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_ModelCatalog_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Upstream failure"
+          }
+        },
+        "security": [
+          {
+            "AccessTokenAuth": []
+          }
+        ],
+        "summary": "Refresh Model Catalog Handler",
+        "tags": [
+          "model-catalog"
         ]
       }
     },

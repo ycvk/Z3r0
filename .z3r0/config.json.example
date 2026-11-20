@@ -48,9 +48,11 @@
         "embedding_key": "sk-3844...",
         "embedding_model": "text-embedding-3-small",
         "embedding_dim": 1536,
-        "llm_api": "https://api.openai.com/v1",
-        "llm_key": "sk-3844...",
-        "llm_model": "gpt-5",
+        "llm": {
+            "provider": "openai",
+            "api": "openai-responses",
+            "id": "gpt-5"
+        },
         "graph_matches": 5,
         "chunk_matches": 10
     },
@@ -59,66 +61,88 @@
         "base_url": "https://fofa.info",
         "api_key": ""
     },
+    "providers": {
+        "openai": {
+            "name": "OpenAI",
+            "api_key": "sk-3844...",
+            "endpoints": {
+                "openai-responses": "https://api.openai.com/v1"
+            },
+            "headers": {}
+        }
+    },
     "agents": {
         "cso": {
             "code": "cso",
             "name": "Z3r0",
             "description": "Chief Security Officer",
-            "base_url": "https://api.openai.com/v1",
-            "api_key": "sk-3844...",
-            "model": "gpt-5.5",
-            "use_responses": false,
-            "context_window": 1000000
+            "model": {
+                "provider": "openai",
+                "api": "openai-responses",
+                "id": "gpt-5.5",
+                "context_window": 272000,
+                "max_tokens": 128000
+            }
         },
         "cae": {
             "code": "cae",
             "name": "V3ra",
             "description": "Chief Audit Engineer",
-            "base_url": "https://api.openai.com/v1",
-            "api_key": "sk-3844...",
-            "model": "gpt-5.5",
-            "use_responses": false,
-            "context_window": 1000000
+            "model": {
+                "provider": "openai",
+                "api": "openai-responses",
+                "id": "gpt-5.5",
+                "context_window": 272000,
+                "max_tokens": 128000
+            }
         },
         "cce": {
             "code": "cce",
             "name": "Nu1L",
             "description": "Chief Cryptography Engineer",
-            "base_url": "https://api.openai.com/v1",
-            "api_key": "sk-3844...",
-            "model": "gpt-5.5",
-            "use_responses": false,
-            "context_window": 1000000
+            "model": {
+                "provider": "openai",
+                "api": "openai-responses",
+                "id": "gpt-5.5",
+                "context_window": 272000,
+                "max_tokens": 128000
+            }
         },
         "cie": {
             "code": "cie",
             "name": "L1ly",
             "description": "Chief Intelligence Engineer",
-            "base_url": "https://api.openai.com/v1",
-            "api_key": "sk-3844...",
-            "model": "gpt-5.5",
-            "use_responses": false,
-            "context_window": 1000000
+            "model": {
+                "provider": "openai",
+                "api": "openai-responses",
+                "id": "gpt-5.5",
+                "context_window": 272000,
+                "max_tokens": 128000
+            }
         },
         "cpe": {
             "code": "cpe",
             "name": "Fr4nk",
             "description": "Chief Penetration Engineer",
-            "base_url": "https://api.openai.com/v1",
-            "api_key": "sk-3844...",
-            "model": "gpt-5.5",
-            "use_responses": false,
-            "context_window": 1000000
+            "model": {
+                "provider": "openai",
+                "api": "openai-responses",
+                "id": "gpt-5.5",
+                "context_window": 272000,
+                "max_tokens": 128000
+            }
         },
         "cre": {
             "code": "cre",
             "name": "J4m3",
             "description": "Chief Reverse Engineer",
-            "base_url": "https://api.openai.com/v1",
-            "api_key": "sk-3844...",
-            "model": "gpt-5.5",
-            "use_responses": false,
-            "context_window": 1000000
+            "model": {
+                "provider": "openai",
+                "api": "openai-responses",
+                "id": "gpt-5.5",
+                "context_window": 272000,
+                "max_tokens": 128000
+            }
         }
     }
 }

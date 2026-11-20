@@ -63,16 +63,41 @@ Edit the system runtime configuration in `.z3r0/config.json`, mainly updating th
 | `system.encrypt_key` | System data encryption key. This must be changed. A random string of at least 32 bytes is recommended. |
 | `system.bootstrap_admin` | Default system administrator information. This must be changed. A strong password is recommended. |
 | `database` | System database connection information. The bundled production Compose deployment uses host networking, so `host` remains `127.0.0.1`. |
-| `agents.*` | LLM API configuration for each agent. Providers and models can be configured separately by role. |
+| `providers.*` | Model providers. Each one holds an API key, optional request headers, and the base URL of every protocol it serves under `endpoints`. |
+| `agents.*.model` | The model of each agent: a provider, the protocol to reach it on, the model id, and the request parameters sent with every call. |
 | `lightrag.embedding_*` | OpenAI-compatible embedding API, key, model, and vector dimension. |
-| `lightrag.llm_*` | Independent OpenAI-compatible LLM API, key, and model used for entity and relationship extraction. |
+| `lightrag.llm` | The provider, protocol, and model id used for entity and relationship extraction. |
 | `lightrag.graph_matches` | Number of entity and relationship matches included in graph retrieval context. |
 | `lightrag.chunk_matches` | Number of original document chunks included in text retrieval context. |
 | `fofa.enabled` | Enables the `fofa_search` function tool. It is mounted only when this is `true` and both FOFA connection fields are populated. |
 | `fofa.base_url` | FOFA API base URL, normally `https://fofa.info`. |
 | `fofa.api_key` | FOFA API key. Keep this value private and rotate it according to your operational policy. |
 
-LightRAG uses `lightrag.llm_*` for entity and relationship extraction. These settings are configured independently from each agent model in `agents.*`. Both bundled Compose files pull `ghcr.io/yv1ing/postgres-for-rag:latest` and `ghcr.io/yv1ing/pgadmin4:latest` from GitHub Container Registry. The PostgreSQL image includes the pgvector and Apache AGE extensions required by LightRAG storage.
+A provider endpoint speaks one of four protocols:
+
+| Protocol | Base URL example |
+| --- | --- |
+| `openai-completions` | `https://api.deepseek.com` |
+| `openai-responses` | `https://api.openai.com/v1` |
+| `anthropic-messages` | `https://api.anthropic.com` |
+| `google-generative-ai` | `https://generativelanguage.googleapis.com/v1beta` |
+
+A provider with several protocols, such as a relay that serves both the OpenAI and the Anthropic format under one key, lists one base URL per protocol. The API key is sent the way each protocol's official client sends it; a relay that expects another header takes it from the provider's `headers`.
+
+`agents.*.model` takes these parameters:
+
+| Parameter | Description |
+| --- | --- |
+| `context_window` | Tokens the runtime keeps a conversation within. Context compaction and the per-call input budget are sized from it; `0` turns both off. |
+| `max_tokens` | Output token cap. Required for `anthropic-messages`; elsewhere the provider default applies when it is omitted. Each call lowers the cap to what the input leaves of the context window. |
+| `temperature`, `top_p` | Sampling parameters. Omitted values use the provider default. |
+| `reasoning_effort` | Reasoning effort for models controlled by an effort level. |
+| `thinking_budget_tokens` | Thinking token budget for Anthropic and Gemini models controlled by a budget. It cannot be combined with `reasoning_effort`. |
+| `extra_headers`, `extra_body` | Headers and JSON fields added to every request, for parameters specific to one provider. |
+
+`System config` is the usual place to edit providers and models. It ships with a model catalog built from the [pi-ai](https://pi.dev/models) model data: adding a provider from the catalog fills in its endpoints, and selecting a model loads its protocol, context window, and output cap, which can then be changed. `Update catalog` downloads the latest catalog release; a model that is not in the catalog can be entered by its id.
+
+LightRAG uses `lightrag.llm` for entity and relationship extraction and reaches it over Chat Completions, so it must point at an `openai-completions` or `openai-responses` endpoint. Both bundled Compose files pull `ghcr.io/yv1ing/postgres-for-rag:latest` and `ghcr.io/yv1ing/pgadmin4:latest` from GitHub Container Registry. The PostgreSQL image includes the pgvector and Apache AGE extensions required by LightRAG storage.
 
 The embedding API, model, and dimension define the knowledge collection's vector representation and should be selected before the first document import. Moving an existing collection to a different embedding model or dimension requires removing its indexed documents and importing them again. Embedding credentials, extraction LLM settings, and graph and document retrieval breadth can otherwise be managed independently through `System config`.
 

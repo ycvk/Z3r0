@@ -14,4 +14,5 @@
 - [ADR-0005 Credentials and captured traffic are their own domains](adr/ADR-0005-credentials-and-traffic-are-their-own-domains.md) — adr — 2026-11-19
 - [ADR-0006 A Flow is deleted with its session](adr/ADR-0006-flow-deletion-rules.md) — adr — 2026-11-19
 - [ADR-0007 Runtime state is installed at startup or stored in the database](adr/ADR-0007-runtime-state-is-installed-or-stored.md) — adr — 2026-11-19
+- [ADR-0008 Models are configured as providers, protocols, and explicit request parameters](adr/ADR-0008-model-providers-catalog-and-protocols.md) — adr — 2026-11-20
 - [Agent Memory and Retrieval Assessment](work/2026-11-20-agent-memory-assessment/10-assessment.md) — assessment — 2026-11-20

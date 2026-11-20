@@ -6,13 +6,15 @@ import asyncio
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from functools import partial
+from typing import Any
 
 from lightrag import LightRAG, QueryParam, RoleLLMConfig
 from lightrag.llm.openai import openai_complete, openai_embed
 from lightrag.utils import EmbeddingFunc
 
-from config import ROOT_PATH, LightRAGConfig, get_config
+from config import ROOT_PATH, GlobalConfig, LightRAGConfig, ModelEndpoint, get_config
 from core.conversation.formats import sanitize_context_text
 from core.runtime.context import AgentRuntimeContext
 from logger import get_logger
@@ -42,6 +44,19 @@ _RESERVED_CONTEXT_LINES = frozenset({
     _RAG_CONTEXT_END,
 })
 
+
+@dataclass(frozen=True, slots=True)
+class LightRAGSetup:
+    """Everything one LightRAG instance is built from."""
+
+    config: LightRAGConfig
+    llm_endpoint: ModelEndpoint
+
+
+def lightrag_setup(cfg: GlobalConfig) -> LightRAGSetup:
+    return LightRAGSetup(config=cfg.lightrag, llm_endpoint=cfg.model_endpoint(cfg.lightrag.llm))
+
+
 _rag: LightRAG | None = None
 _rag_condition = asyncio.Condition()
 _rag_active_operations = 0
@@ -56,7 +71,7 @@ async def start_lightrag() -> None:
             return
         _rag_transitioning = True
     try:
-        rag = await _initialize_lightrag(get_config().lightrag, "initialization")
+        rag = await _initialize_lightrag(lightrag_setup(get_config()), "initialization")
         async with _rag_condition:
             _rag = rag
     finally:
@@ -89,8 +104,8 @@ async def stop_lightrag() -> None:
 
 
 async def restart_lightrag(
-    config: LightRAGConfig,
-    rollback_config: LightRAGConfig | None = None,
+    setup: LightRAGSetup,
+    rollback_setup: LightRAGSetup | None = None,
 ) -> None:
     global _rag, _rag_transitioning
     async with _rag_condition:
@@ -107,14 +122,14 @@ async def restart_lightrag(
     try:
         if previous is not None:
             await _finalize_lightrag(previous)
-        replacement = await _initialize_lightrag(config, "restart")
+        replacement = await _initialize_lightrag(setup, "restart")
         async with _rag_condition:
             _rag = replacement
     except BaseException as exc:
-        if rollback_config is not None:
+        if rollback_setup is not None:
             try:
                 rollback = await _initialize_lightrag(
-                    rollback_config,
+                    rollback_setup,
                     "Rollback initialization",
                 )
             except BaseException as rollback_error:
@@ -227,15 +242,17 @@ def _format_lightrag_context(context: str) -> str:
     ))
 
 
-def _build_lightrag(cfg: LightRAGConfig) -> LightRAG:
+def _build_lightrag(setup: LightRAGSetup) -> LightRAG:
+    cfg = setup.config
+    endpoint = setup.llm_endpoint
     _configure_postgres_environment(cfg)
     LIGHTRAG_WORKING_DIR.mkdir(parents=True, exist_ok=True)
 
-    extraction_llm = partial(
-        openai_complete,
-        base_url=cfg.llm_api,
-        api_key=cfg.llm_key or "unused",
-    )
+    # LightRAG speaks Chat Completions to the endpoint, whichever OpenAI protocol the agents use on it.
+    llm_options: dict[str, Any] = {"base_url": endpoint.base_url, "api_key": endpoint.api_key or "unused"}
+    if endpoint.headers:
+        llm_options["extra_headers"] = endpoint.headers
+    extraction_llm = partial(openai_complete, **llm_options)
 
     return LightRAG(
         working_dir=str(LIGHTRAG_WORKING_DIR),
@@ -258,22 +275,22 @@ def _build_lightrag(cfg: LightRAGConfig) -> LightRAG:
             ),
         ),
         llm_model_func=extraction_llm,
-        llm_model_name=cfg.llm_model,
+        llm_model_name=cfg.llm.id,
         role_llm_configs={
             "extract": RoleLLMConfig(
                 func=extraction_llm,
                 metadata={
                     "binding": "openai",
-                    "model": cfg.llm_model,
-                    "host": cfg.llm_api,
+                    "model": cfg.llm.id,
+                    "host": endpoint.base_url,
                 },
             ),
         },
     )
 
 
-async def _initialize_lightrag(config: LightRAGConfig, operation: str) -> LightRAG:
-    rag = _build_lightrag(config)
+async def _initialize_lightrag(setup: LightRAGSetup, operation: str) -> LightRAG:
+    rag = _build_lightrag(setup)
     try:
         await rag.initialize_storages()
     except BaseException as exc:
