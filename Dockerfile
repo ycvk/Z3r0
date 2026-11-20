@@ -23,12 +23,16 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV UV_PYTHON_DOWNLOADS=never
 ENV PATH="/app/.venv/bin:$PATH"
+ENV TIKTOKEN_CACHE_DIR=/app/.tiktoken
 
 WORKDIR /app
 
 COPY --from=uv-bin /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-dev --no-cache
+# LightRAG and context compaction count tokens with tiktoken, which downloads an encoding the first
+# time it is used. Fetching every encoding here lets the application start without that download.
+RUN python -c "import tiktoken; [tiktoken.get_encoding(name) for name in tiktoken.list_encoding_names()]"
 
 COPY app.py config.py database.py logger.py main.py ./
 COPY core ./core
