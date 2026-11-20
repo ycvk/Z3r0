@@ -6,6 +6,7 @@ All notable changes to Z3r0 are documented in this file.
 
 ### Added
 
+- Added a fixed task set under `evals/` that runs as Flows against a running instance and a sandbox container and records pass or fail, duration, and token usage per task (`uv run python -m evals.run --help`).
 - Added retention for captured traffic. Entries older than `agent_runtime.traffic_retention_seconds` (7 days by default) are deleted, and each sandbox container keeps its newest `agent_runtime.traffic_max_entries_per_container` entries (50000 by default). Setting either to 0 turns that limit off. Both are editable on the system config page.
 
 ### Fixed
