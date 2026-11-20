@@ -1,10 +1,11 @@
-import { AtSign, Sparkles } from "lucide-react";
+import { AtSign, RotateCw, Sparkles } from "lucide-react";
 import { useMemo, useState, type RefObject } from "react";
 import { AGENT_INPUT_PART_TYPE } from "../../shared/api/generated/constants";
 import type { AgentImageInputPart, AgentInfo, AgentInputPart } from "../../shared/api/types";
 import { formatDateTime } from "../../shared/lib/date";
 import { ImagePreview, imageDataUrl, type ImagePreviewState } from "./ImagePreview";
 import type { AgentTranscript, ChatNode } from "./chatState";
+import type { ModelFailureNotice } from "./transcriptTypes";
 import { TranscriptContent } from "./Transcript";
 import { emptyAgentTranscript, isTranscriptEmpty } from "./transcriptView";
 import type { SubagentSelection } from "./subagentView";
@@ -12,6 +13,7 @@ import type { SubagentSelection } from "./subagentView";
 type ChatStreamProps = {
   nodes: ChatNode[];
   streaming: boolean;
+  modelFailure: ModelFailureNotice | null;
   agents: AgentInfo[];
   selectedSubagent: SubagentSelection | null;
   tailRef: RefObject<HTMLDivElement | null>;
@@ -25,6 +27,7 @@ type RenderedChatNode =
 export function ChatStream({
   nodes,
   streaming,
+  modelFailure,
   agents,
   selectedSubagent,
   tailRef,
@@ -86,8 +89,25 @@ export function ChatStream({
           onOpenSubagent={onOpenSubagent}
         />
       ) : null}
+      {streaming && modelFailure ? <ModelFailureBanner notice={modelFailure} /> : null}
       <div ref={tailRef} className="chat-tail" />
       <ImagePreview preview={preview} onClose={() => setPreview(null)} />
+    </div>
+  );
+}
+
+function ModelFailureBanner({ notice }: { notice: ModelFailureNotice }) {
+  const retrying = notice.attempt < notice.maxAttempts;
+  return (
+    <div className="chat-row chat-row-agent">
+      <div className="model-failure-notice" role="status">
+        <RotateCw size={14} />
+        <span>
+          {notice.agentName ? `${notice.agentName}: ` : ""}
+          model request failed (attempt {notice.attempt} of {notice.maxAttempts})
+          {retrying ? ", retrying" : ""} — {notice.message}
+        </span>
+      </div>
     </div>
   );
 }

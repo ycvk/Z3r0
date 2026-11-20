@@ -497,12 +497,13 @@ export function PlaygroundPage() {
               preserveScrollKey={historyVersion}
               resetKey={activeSessionId ?? "new-chat"}
               scrollButtonClassName="chat-scroll-tail-floating"
-              watch={[chatState.nodes, chatState.streaming]}
+              watch={[chatState.nodes, chatState.streaming, chatState.modelFailure]}
             >
               {(tailRef) => (
                 <ChatStream
                   nodes={chatState.nodes}
                   streaming={chatState.streaming}
+                  modelFailure={chatState.modelFailure}
                   agents={agents}
                   selectedSubagent={selectedSubagent}
                   tailRef={tailRef}

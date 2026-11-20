@@ -92,9 +92,17 @@ export type ChatNode =
     }
   | ({ kind: "agent"; id: string } & AgentTranscript);
 
+export type ModelFailureNotice = {
+  agentName: string;
+  attempt: number;
+  maxAttempts: number;
+  message: string;
+};
+
 export type ChatState = {
   nodes: ChatNode[];
   streaming: boolean;
+  modelFailure: ModelFailureNotice | null;
   pendingNested: Record<string, AgentContentEvent[]>;
   liveFrom: number | null;
 };

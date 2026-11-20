@@ -20,6 +20,7 @@ All notable changes to Z3r0 are documented in this file.
 
 ### Fixed
 
+- Fixed a model that cannot be reached looking like a model that is thinking. Every failed model request is logged with its provider, model, attempt, and root cause, and the playground shows the failure while the runner retries. The error that ends a turn names the root cause, such as the TLS or connection failure behind "Connection error."
 - Fixed the application failing to start when the tiktoken encoding download failed. The application image now contains the encodings and starts without that download.
 
 ## [0.4.0] - 2026-11-20

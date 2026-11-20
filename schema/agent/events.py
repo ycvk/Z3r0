@@ -19,6 +19,7 @@ class AgentEventTypeSchema(StrEnum):
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
     SUBAGENT_TASK = "subagent_task"
+    MODEL_FAILURE = "model_failure"
     DONE = "done"
     ERROR = "error"
 
@@ -180,6 +181,18 @@ class SubagentTaskEvent(_AgentScopedEvent):
     progress: str = ""
 
 
+class ModelFailureEvent(_AgentScopedEvent):
+    """A model request failed; the runner retries transient failures before the turn fails.
+
+    Live only: it never enters stored history.
+    """
+
+    type: Literal[AgentEventTypeSchema.MODEL_FAILURE] = AgentEventTypeSchema.MODEL_FAILURE
+    attempt: int
+    max_attempts: int
+    message: str
+
+
 class DoneEvent(_AgentScopedEvent):
     type: Literal[AgentEventTypeSchema.DONE] = AgentEventTypeSchema.DONE
 
@@ -216,6 +229,7 @@ AgentEventSchema = Annotated[
     | ToolCallEvent
     | ToolResultEvent
     | SubagentTaskEvent
+    | ModelFailureEvent
     | DoneEvent
     | ErrorEvent,
     Field(discriminator="type"),

@@ -38,7 +38,7 @@ export type {
   TranscriptBlock,
 } from "./transcriptTypes";
 
-export const initialChatState: ChatState = { nodes: [], streaming: false, pendingNested: {}, liveFrom: null };
+export const initialChatState: ChatState = { nodes: [], streaming: false, modelFailure: null, pendingNested: {}, liveFrom: null };
 
 type AgentNode = Extract<ChatNode, { kind: "agent" }>;
 

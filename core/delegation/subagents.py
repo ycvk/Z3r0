@@ -12,6 +12,7 @@ from typing import Any
 from agents import Agent, RunContextWrapper, Runner, Tool, function_tool
 
 from config import get_config
+from core.agent.models import ModelCallFailure, describe_exception, listen_for_model_failures
 from core.agent.protocols import AgentRegistryProtocol, SessionAgentGraphProtocol
 from core.agent.tool_snapshot import AgentToolSnapshot
 from core.conversation.items import extract_message_text
@@ -43,6 +44,7 @@ from schema.agent.events import (
     AgentInputPart,
     DoneEvent,
     ErrorEvent,
+    ModelFailureEvent,
     SubagentTaskEvent,
     TextCompleteEvent,
     ThinkingCompleteEvent,
@@ -609,7 +611,7 @@ async def _drive_subagent(
         raise
     except Exception as exc:
         logger.exception("Subagent drive failed: %s", driver.run_id)
-        await _fail_subagent(driver, str(exc) or "Subagent failed")
+        await _fail_subagent(driver, describe_exception(exc))
 
 
 async def _settle_subagent(driver: _SubagentDriver) -> None:
@@ -668,16 +670,29 @@ def _subagent_run_turn(driver: _SubagentDriver) -> Callable[[TurnTrigger], Any]:
         async with activate_lightrag_context(context, retrieval_query):
             async with runtime_ports().activate_turn_context(context):
                 user_input = [build_turn_input_item(trigger)]
-                if agent_config is not None:
-                    await memory_session.compact_if_needed(agent_config=agent_config, incoming_items=user_input)
-                stream = Runner.run_streamed(
-                    starting_agent=child_agent,
-                    input=user_input,
-                    session=memory_session,
-                    context=context,
-                    max_turns=max_turns,
-                    run_config=build_context_run_config(agent_config) if agent_config is not None else None,
-                )
+
+                def report_model_failure(failure: ModelCallFailure) -> None:
+                    _publish_event(snapshot.session_id, _tag_nested(ModelFailureEvent(
+                        created_at=datetime.now(),
+                        agent_name=child_agent.name,
+                        attempt=failure.attempt,
+                        max_attempts=failure.max_attempts,
+                        message=failure.message,
+                    ), snapshot))
+
+                # The run executes in a task that copies this context, so the listener set here is
+                # the one its model calls report to.
+                with listen_for_model_failures(report_model_failure):
+                    if agent_config is not None:
+                        await memory_session.compact_if_needed(agent_config=agent_config, incoming_items=user_input)
+                    stream = Runner.run_streamed(
+                        starting_agent=child_agent,
+                        input=user_input,
+                        session=memory_session,
+                        context=context,
+                        max_turns=max_turns,
+                        run_config=build_context_run_config(agent_config) if agent_config is not None else None,
+                    )
                 buffers: dict[str, DeltaBuffer] = {}
                 try:
                     async for event in iter_interruptible_events(

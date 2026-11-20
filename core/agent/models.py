@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import replace
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, replace
 
 import httpx
 from agents import (
@@ -35,7 +37,10 @@ from core.agent.anthropic_messages import AnthropicMessagesModel
 from core.agent.google_generative_ai import GoogleGenerativeAIModel
 from core.agent.model_input import ModelInputAdapter
 from core.conversation.tokens import estimate_items_tokens, estimate_text_tokens
+from logger import get_logger
 
+
+logger = get_logger(__name__)
 
 _MODEL_CONNECT_TIMEOUT_SECONDS = 15.0
 _MODEL_REQUEST_MAX_RETRIES = 8
@@ -50,6 +55,45 @@ _CONTEXT_SAFETY_RATIO = 0.15
 _MIN_OUTPUT_WITH_RATIO_MARGIN = 32768
 
 _ModelCloser = Callable[[], Awaitable[None]]
+
+
+@dataclass(frozen=True, slots=True)
+class ModelCallFailure:
+    """One failed model request. The runner may retry it; `attempt` counts consecutive failures."""
+
+    attempt: int
+    max_attempts: int
+    message: str
+
+
+ModelFailureListener = Callable[[ModelCallFailure], None]
+_failure_listener: ContextVar[ModelFailureListener | None] = ContextVar("model_failure_listener", default=None)
+
+
+@contextmanager
+def listen_for_model_failures(listener: ModelFailureListener) -> Iterator[None]:
+    """Report failed model requests of the runs started inside this block to `listener`."""
+    token = _failure_listener.set(listener)
+    try:
+        yield
+    finally:
+        _failure_listener.reset(token)
+
+
+def describe_exception(error: BaseException) -> str:
+    """The error's message followed by its root cause, which names what actually went wrong.
+
+    Provider clients wrap transport failures in a generic error such as "Connection error."; the
+    TLS, DNS, or socket failure behind it is only on the exception chain.
+    """
+    message = str(error).strip() or type(error).__name__
+    root = error
+    while (cause := root.__cause__ or root.__context__) is not None:
+        root = cause
+    if root is error:
+        return message
+    detail = f"{type(root).__name__}: {root}".strip().rstrip(":")
+    return message if detail in message else f"{message} ({detail})"
 
 
 def build_model_retry_settings() -> ModelRetrySettings:
@@ -121,6 +165,8 @@ class Z3r0Model(Model):
         self._close = close
         self._context_window = model.context_window
         self._input_adapter = ModelInputAdapter()
+        self._target = f"provider={model.provider} api={model.api.value} model={model.id}"
+        self._failed_attempts = 0
 
     def get_retry_advice(self, request: ModelRetryAdviceRequest) -> ModelRetryAdvice | None:
         return self._inner.get_retry_advice(request)
@@ -140,18 +186,24 @@ class Z3r0Model(Model):
         prompt: ResponsePromptParam | None,
     ) -> ModelResponse:
         adapted = self._input_adapter.adapt(input)
-        return await self._inner.get_response(
-            system_instructions,
-            adapted,
-            self._fit_output_cap(model_settings, system_instructions, adapted, tools),
-            tools,
-            output_schema,
-            handoffs,
-            tracing,
-            previous_response_id=previous_response_id,
-            conversation_id=conversation_id,
-            prompt=prompt,
-        )
+        try:
+            response = await self._inner.get_response(
+                system_instructions,
+                adapted,
+                self._fit_output_cap(model_settings, system_instructions, adapted, tools),
+                tools,
+                output_schema,
+                handoffs,
+                tracing,
+                previous_response_id=previous_response_id,
+                conversation_id=conversation_id,
+                prompt=prompt,
+            )
+        except Exception as exc:
+            self._report_failure(exc)
+            raise
+        self._failed_attempts = 0
+        return response
 
     async def stream_response(
         self,
@@ -168,22 +220,50 @@ class Z3r0Model(Model):
         prompt: ResponsePromptParam | None,
     ) -> AsyncIterator[TResponseStreamEvent]:
         adapted = self._input_adapter.adapt(input)
-        async for event in self._inner.stream_response(
-            system_instructions,
-            adapted,
-            self._fit_output_cap(model_settings, system_instructions, adapted, tools),
-            tools,
-            output_schema,
-            handoffs,
-            tracing,
-            previous_response_id=previous_response_id,
-            conversation_id=conversation_id,
-            prompt=prompt,
-        ):
-            yield event
+        try:
+            async for event in self._inner.stream_response(
+                system_instructions,
+                adapted,
+                self._fit_output_cap(model_settings, system_instructions, adapted, tools),
+                tools,
+                output_schema,
+                handoffs,
+                tracing,
+                previous_response_id=previous_response_id,
+                conversation_id=conversation_id,
+                prompt=prompt,
+            ):
+                yield event
+        except Exception as exc:
+            self._report_failure(exc)
+            raise
+        self._failed_attempts = 0
 
     async def close(self) -> None:
         await self._close()
+
+    def _report_failure(self, error: Exception) -> None:
+        """Log a failed request with its cause and tell the turn that is running it.
+
+        The runner retries transient failures on its own and says nothing until the last attempt
+        fails, so without this a provider that cannot be reached looks like a model that is thinking.
+        """
+        self._failed_attempts += 1
+        message = describe_exception(error)
+        logger.warning(
+            "Model request failed %s attempt=%d/%d: %s",
+            self._target,
+            self._failed_attempts,
+            _MODEL_REQUEST_MAX_RETRIES + 1,
+            message,
+        )
+        listener = _failure_listener.get()
+        if listener is not None:
+            listener(ModelCallFailure(
+                attempt=self._failed_attempts,
+                max_attempts=_MODEL_REQUEST_MAX_RETRIES + 1,
+                message=message,
+            ))
 
     def _fit_output_cap(
         self,

@@ -14,13 +14,22 @@ from typing import TypeAlias
 
 from core.runtime.event_log import upsert_timeline_events
 from logger import get_logger
-from schema.agent.events import AgentEventSchema
+from schema.agent.events import (
+    AgentEventSchema,
+    SubagentTaskEvent,
+    TextCompleteEvent,
+    TextDeltaEvent,
+    ThinkingCompleteEvent,
+    ThinkingDeltaEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 
 
 logger = get_logger(__name__)
 
 # event types that never enter the persisted timeline
-_CONTROL_TYPES = frozenset({"run_state", "done"})
+_CONTROL_TYPES = frozenset({"run_state", "done", "model_failure"})
 _DELTA_TYPES = frozenset({"text_delta", "thinking_delta"})
 _FLUSH_RETRY_DELAYS_SECONDS = (0.1, 0.5, 1.5)
 
@@ -31,17 +40,15 @@ class TimelinePersistenceError(RuntimeError):
 
 def timeline_item_key(event: AgentEventSchema) -> str | None:
     """Stable identity for events that carry their own id; None for keyless ones."""
-    event_type = str(event.type)
-    nested_call_id = getattr(event, "nested_call_id", "")
-    if event_type in ("text_delta", "text_complete"):
-        return f"text:{nested_call_id}:{event.segment_id}"
-    if event_type in ("thinking_delta", "thinking_complete"):
-        return f"thinking:{nested_call_id}:{event.segment_id}"
-    if event_type == "tool_call":
-        return f"tc:{nested_call_id}:{event.call_id}"
-    if event_type == "tool_result":
-        return f"tr:{nested_call_id}:{event.call_id}"
-    if event_type == "subagent_task":
+    if isinstance(event, (TextDeltaEvent, TextCompleteEvent)):
+        return f"text:{event.nested_call_id}:{event.segment_id}"
+    if isinstance(event, (ThinkingDeltaEvent, ThinkingCompleteEvent)):
+        return f"thinking:{event.nested_call_id}:{event.segment_id}"
+    if isinstance(event, ToolCallEvent):
+        return f"tc:{event.nested_call_id}:{event.call_id}"
+    if isinstance(event, ToolResultEvent):
+        return f"tr:{event.nested_call_id}:{event.call_id}"
+    if isinstance(event, SubagentTaskEvent):
         return f"sa:{event.run_id}"
     return None
 

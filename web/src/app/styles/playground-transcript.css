@@ -222,6 +222,26 @@
   font-size: 13px;
 }
 
+.model-failure-notice {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 12px;
+  background: var(--z-warning-bg);
+  border: 1px solid var(--z-warning-border);
+  border-radius: 10px;
+  color: var(--z-warning);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.model-failure-notice svg {
+  flex: none;
+  margin-top: 2px;
+}
+
 .thinking-block-active {
   border-color: var(--z-danger-border);
   box-shadow: 0 0 0 3px rgba(217, 45, 58, 0.06);

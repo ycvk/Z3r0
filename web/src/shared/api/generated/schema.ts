@@ -1398,12 +1398,12 @@ export interface components {
             /** Name */
             name: string;
         };
-        AgentEventSchema: components["schemas"]["UserMessageEvent"] | components["schemas"]["TurnBoundaryEvent"] | components["schemas"]["RunStateEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["TextCompleteEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["ThinkingCompleteEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["SubagentTaskEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+        AgentEventSchema: components["schemas"]["UserMessageEvent"] | components["schemas"]["TurnBoundaryEvent"] | components["schemas"]["RunStateEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["TextCompleteEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["ThinkingCompleteEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["SubagentTaskEvent"] | components["schemas"]["ModelFailureEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
         /**
          * AgentEventTypeSchema
          * @enum {string}
          */
-        AgentEventTypeSchema: "user_message" | "turn_boundary" | "run_state" | "thinking_delta" | "thinking_complete" | "text_delta" | "text_complete" | "tool_call" | "tool_result" | "subagent_task" | "done" | "error";
+        AgentEventTypeSchema: "user_message" | "turn_boundary" | "run_state" | "thinking_delta" | "thinking_complete" | "text_delta" | "text_complete" | "tool_call" | "tool_result" | "subagent_task" | "model_failure" | "done" | "error";
         /**
          * AgentImageDetailSchema
          * @enum {string}
@@ -1719,7 +1719,7 @@ export interface components {
         /** AgentTurnResponse */
         AgentTurnResponse: {
             /** Events */
-            events: (components["schemas"]["UserMessageEvent"] | components["schemas"]["TurnBoundaryEvent"] | components["schemas"]["RunStateEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["TextCompleteEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["ThinkingCompleteEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["SubagentTaskEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"])[];
+            events: (components["schemas"]["UserMessageEvent"] | components["schemas"]["TurnBoundaryEvent"] | components["schemas"]["RunStateEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["TextCompleteEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["ThinkingCompleteEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["SubagentTaskEvent"] | components["schemas"]["ModelFailureEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"])[];
             session: components["schemas"]["AgentSessionSummarySchema"];
             /** Session Id */
             session_id: string;
@@ -3845,6 +3845,50 @@ export interface components {
             thinking_budget_tokens?: number | null;
             /** Top P */
             top_p?: number | null;
+        };
+        /**
+         * ModelFailureEvent
+         * @description A model request failed; the runner retries transient failures before the turn fails.
+         *
+         *     Live only: it never enters stored history.
+         */
+        ModelFailureEvent: {
+            /**
+             * Agent Name
+             * @default
+             */
+            agent_name: string;
+            /** Attempt */
+            attempt: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Max Attempts */
+            max_attempts: number;
+            /** Message */
+            message: string;
+            /**
+             * Nested Call Id
+             * @default
+             */
+            nested_call_id: string;
+            /**
+             * Nested For
+             * @default
+             */
+            nested_for: string;
+            /**
+             * Seq
+             * @default 0
+             */
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "model_failure";
         };
         /** ModelRef */
         ModelRef: {

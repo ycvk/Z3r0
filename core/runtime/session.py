@@ -10,6 +10,7 @@ from typing import Any
 from agents import Runner
 
 from config import get_config
+from core.agent.models import ModelCallFailure, describe_exception, listen_for_model_failures
 from core.agent.registry import AgentRegistry, SessionAgentGraph
 from core.agent.tool_snapshot import AgentToolSnapshot
 from core.conversation.context_budget import build_context_run_config
@@ -36,6 +37,7 @@ from schema.agent.events import (
     AgentInputPart,
     DoneEvent,
     ErrorEvent,
+    ModelFailureEvent,
     RunStateEvent,
     TurnBoundaryEvent,
     UserMessageEvent,
@@ -363,20 +365,33 @@ class AgentSession:
 
             user_input = [build_turn_input_item(trigger)]
             agent_config = get_config().agents.get(turn_agent_code)
-            if agent_config is not None:
-                await memory_session.compact_if_needed(
-                    agent_config=agent_config,
-                    incoming_items=user_input,
-                )
 
-            stream = Runner.run_streamed(
-                starting_agent=agent,
-                session=memory_session,
-                input=user_input,
-                context=turn_context,
-                max_turns=get_config().agent_runtime.main_max_turns,
-                run_config=build_context_run_config(agent_config) if agent_config is not None else None,
-            )
+            def report_model_failure(failure: ModelCallFailure) -> None:
+                self.publish_external(tag(ModelFailureEvent(
+                    created_at=datetime.now(),
+                    agent_name=agent.name,
+                    attempt=failure.attempt,
+                    max_attempts=failure.max_attempts,
+                    message=failure.message,
+                )))
+
+            # The run executes in a task that copies this context, so the listener set here is the
+            # one its model calls report to.
+            with listen_for_model_failures(report_model_failure):
+                if agent_config is not None:
+                    await memory_session.compact_if_needed(
+                        agent_config=agent_config,
+                        incoming_items=user_input,
+                    )
+
+                stream = Runner.run_streamed(
+                    starting_agent=agent,
+                    session=memory_session,
+                    input=user_input,
+                    context=turn_context,
+                    max_turns=get_config().agent_runtime.main_max_turns,
+                    run_config=build_context_run_config(agent_config) if agent_config is not None else None,
+                )
         except (InterruptSignal, asyncio.CancelledError):
             raise
         except Exception as exc:
@@ -384,7 +399,7 @@ class AgentSession:
             await self._publish(tag(ErrorEvent(
                 created_at=datetime.now(),
                 agent_name=turn_agent_code,
-                message=str(exc) or "Agent turn setup failed",
+                message=describe_exception(exc),
             )))
             await self._publish(tag(DoneEvent(created_at=datetime.now(), agent_name=turn_agent_code)))
             return None
@@ -428,7 +443,7 @@ class AgentSession:
         except Exception as exc:
             await discard_partial_stream(stream, buffers, log_label="agent")
             logger.exception("Agent stream failed session=%s: %s", self.session_id, exc)
-            stream_error = ErrorEvent(created_at=datetime.now(), agent_name=agent.name, message=str(exc))
+            stream_error = ErrorEvent(created_at=datetime.now(), agent_name=agent.name, message=describe_exception(exc))
         finally:
             await runtime_ports().session_runs.record_session_usage(
                 self.session_id,
@@ -637,7 +652,7 @@ class AgentSession:
         per emission; keyed events reuse the first-seen seq for their item_key.
         Deltas and control frames receive a seq for ordering but are not stored.
         """
-        if isinstance(event, (RunStateEvent, DoneEvent)):
+        if isinstance(event, (RunStateEvent, DoneEvent, ModelFailureEvent)):
             return None
         key = timeline_item_key(event)
         if key is None:

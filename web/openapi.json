@@ -38,6 +38,7 @@
           "mapping": {
             "done": "#/components/schemas/DoneEvent",
             "error": "#/components/schemas/ErrorEvent",
+            "model_failure": "#/components/schemas/ModelFailureEvent",
             "run_state": "#/components/schemas/RunStateEvent",
             "subagent_task": "#/components/schemas/SubagentTaskEvent",
             "text_complete": "#/components/schemas/TextCompleteEvent",
@@ -83,6 +84,9 @@
             "$ref": "#/components/schemas/SubagentTaskEvent"
           },
           {
+            "$ref": "#/components/schemas/ModelFailureEvent"
+          },
+          {
             "$ref": "#/components/schemas/DoneEvent"
           },
           {
@@ -102,6 +106,7 @@
           "tool_call",
           "tool_result",
           "subagent_task",
+          "model_failure",
           "done",
           "error"
         ],
@@ -666,6 +671,7 @@
                 "mapping": {
                   "done": "#/components/schemas/DoneEvent",
                   "error": "#/components/schemas/ErrorEvent",
+                  "model_failure": "#/components/schemas/ModelFailureEvent",
                   "run_state": "#/components/schemas/RunStateEvent",
                   "subagent_task": "#/components/schemas/SubagentTaskEvent",
                   "text_complete": "#/components/schemas/TextCompleteEvent",
@@ -709,6 +715,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/SubagentTaskEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/ModelFailureEvent"
                 },
                 {
                   "$ref": "#/components/schemas/DoneEvent"
@@ -5219,6 +5228,62 @@
           "context_window"
         ],
         "title": "ModelConfig",
+        "type": "object"
+      },
+      "ModelFailureEvent": {
+        "description": "A model request failed; the runner retries transient failures before the turn fails.\n\nLive only: it never enters stored history.",
+        "properties": {
+          "agent_name": {
+            "default": "",
+            "title": "Agent Name",
+            "type": "string"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "nested_call_id": {
+            "default": "",
+            "title": "Nested Call Id",
+            "type": "string"
+          },
+          "nested_for": {
+            "default": "",
+            "title": "Nested For",
+            "type": "string"
+          },
+          "seq": {
+            "default": 0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "type": {
+            "const": "model_failure",
+            "default": "model_failure",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "attempt",
+          "max_attempts",
+          "message"
+        ],
+        "title": "ModelFailureEvent",
         "type": "object"
       },
       "ModelRef": {

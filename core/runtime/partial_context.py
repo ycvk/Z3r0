@@ -13,8 +13,8 @@ from schema.agent.events import (
 
 
 logger = get_logger(__name__)
-_DELTA_TYPES: tuple[type, ...] = (TextDeltaEvent, ThinkingDeltaEvent)
-_COMPLETE_TYPES: tuple[type, ...] = (TextCompleteEvent, ThinkingCompleteEvent)
+_DELTA_TYPES = (TextDeltaEvent, ThinkingDeltaEvent)
+_COMPLETE_TYPES = (TextCompleteEvent, ThinkingCompleteEvent)
 
 
 @dataclass

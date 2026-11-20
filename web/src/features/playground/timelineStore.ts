@@ -1,6 +1,7 @@
 import type { AgentContentEvent, AgentStreamEvent } from "../../shared/api/types";
 import { AGENT_EVENT_TYPE } from "../../shared/api/generated/constants";
 import { buildChatNodesFromEvents, type ChatState } from "./chatState";
+import type { ModelFailureNotice } from "./transcriptTypes";
 
 // One entry per logical timeline item, addressed by a stable key so history
 // and live frames upsert into the same slot. `order` is the server-assigned
@@ -15,13 +16,15 @@ export type TimelineEntry = {
 export type TimelineStore = {
   items: Map<string, TimelineEntry>;
   streaming: boolean;
+  // the latest failed model request of the live turn, until the turn produces anything else
+  modelFailure: ModelFailureNotice | null;
   localCounter: number;
 };
 
 const SYNTHETIC_ORDER_BASE = Number.MAX_SAFE_INTEGER - 1_000_000;
 
 export function emptyTimelineStore(): TimelineStore {
-  return { items: new Map(), streaming: false, localCounter: 0 };
+  return { items: new Map(), streaming: false, modelFailure: null, localCounter: 0 };
 }
 
 // Stable identity shared by every source for one logical item. Returns null for
@@ -30,6 +33,7 @@ export function clientItemKey(event: AgentStreamEvent): string | null {
   switch (event.type) {
     case AGENT_EVENT_TYPE.RUN_STATE:
     case AGENT_EVENT_TYPE.DONE:
+    case AGENT_EVENT_TYPE.MODEL_FAILURE:
       return null;
     case AGENT_EVENT_TYPE.TEXT_DELTA:
     case AGENT_EVENT_TYPE.TEXT_COMPLETE:
@@ -58,9 +62,22 @@ export function ingestEvents(store: TimelineStore, events: readonly AgentStreamE
   if (!events.length) return store;
   const items = new Map(store.items);
   let streaming = store.streaming;
+  let modelFailure = store.modelFailure;
   let localCounter = store.localCounter;
 
   for (const event of events) {
+    if (event.type === AGENT_EVENT_TYPE.MODEL_FAILURE) {
+      // live-only notice: shown while the runner retries, never rendered as a transcript item
+      modelFailure = {
+        agentName: event.agent_name ?? "",
+        attempt: event.attempt,
+        maxAttempts: event.max_attempts,
+        message: event.message,
+      };
+      continue;
+    }
+    // anything else means the turn moved on: it answered, failed for good, or ended
+    modelFailure = null;
     if (event.type === AGENT_EVENT_TYPE.RUN_STATE) {
       // Tracks the main agent only (idle-live): toggles per continuation and
       // flips just the streaming flag — never clears the keyed item map.
@@ -87,14 +104,14 @@ export function ingestEvents(store: TimelineStore, events: readonly AgentStreamE
     items.set(key, { seq, order, event: event as AgentContentEvent });
   }
 
-  return { items, streaming, localCounter };
+  return { items, streaming, modelFailure, localCounter };
 }
 
 // Mark the live turn finished without dropping any persisted items (used on a
 // transport close where the server never sent run_state=false).
 export function endStreaming(store: TimelineStore): TimelineStore {
   if (!store.streaming) return store;
-  return { ...store, streaming: false };
+  return { ...store, streaming: false, modelFailure: null };
 }
 
 export function orderedEvents(store: TimelineStore): AgentContentEvent[] {
@@ -108,5 +125,5 @@ export function orderedEvents(store: TimelineStore): AgentContentEvent[] {
 // id — so identical items never duplicate and ordering follows seq.
 export function deriveChatState(store: TimelineStore): ChatState {
   const nodes = buildChatNodesFromEvents(orderedEvents(store));
-  return { nodes, streaming: store.streaming, pendingNested: {}, liveFrom: null };
+  return { nodes, streaming: store.streaming, modelFailure: store.modelFailure, pendingNested: {}, liveFrom: null };
 }
