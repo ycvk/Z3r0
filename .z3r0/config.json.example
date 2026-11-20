@@ -27,6 +27,8 @@
         "subordinate_max_turns": 1000,
         "model_stream_idle_timeout_seconds": 300,
         "report_retention_seconds": 259200,
+        "traffic_retention_seconds": 604800,
+        "traffic_max_entries_per_container": 50000,
         "context_compression_trigger_ratio": 0.90,
         "context_compression_hard_stop_ratio": 0.98,
         "context_compression_target_ratio": 0.20,

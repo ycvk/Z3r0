@@ -77,6 +77,10 @@ class AgentRuntimeConfig(StrictConfigModel):
     subordinate_max_turns: int = Field(default=1000, ge=1)
     model_stream_idle_timeout_seconds: int = Field(default=300, ge=30)
     report_retention_seconds: int = Field(default=3 * 24 * 60 * 60, ge=0)
+    # captured traffic older than this is deleted; 0 keeps it regardless of age
+    traffic_retention_seconds: int = Field(default=7 * 24 * 60 * 60, ge=0)
+    # the newest entries kept per sandbox container; 0 keeps every entry
+    traffic_max_entries_per_container: int = Field(default=50_000, ge=0)
     context_compression_trigger_ratio: float = Field(default=0.90, gt=0, lt=1)
     context_compression_hard_stop_ratio: float = Field(default=0.98, gt=0, lt=1)
     context_compression_target_ratio: float = Field(default=0.20, gt=0, lt=1)

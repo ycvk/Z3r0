@@ -2,6 +2,12 @@
 
 All notable changes to Z3r0 are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Added retention for captured traffic. Entries older than `agent_runtime.traffic_retention_seconds` (7 days by default) are deleted, and each sandbox container keeps its newest `agent_runtime.traffic_max_entries_per_container` entries (50000 by default). Setting either to 0 turns that limit off. Both are editable on the system config page.
+
 ## [0.4.0] - 2026-11-20
 
 ### Added

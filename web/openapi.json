@@ -314,6 +314,18 @@
             "minimum": 1.0,
             "title": "Subordinate Max Turns",
             "type": "integer"
+          },
+          "traffic_max_entries_per_container": {
+            "default": 50000,
+            "minimum": 0.0,
+            "title": "Traffic Max Entries Per Container",
+            "type": "integer"
+          },
+          "traffic_retention_seconds": {
+            "default": 604800,
+            "minimum": 0.0,
+            "title": "Traffic Retention Seconds",
+            "type": "integer"
           }
         },
         "title": "AgentRuntimeConfig",

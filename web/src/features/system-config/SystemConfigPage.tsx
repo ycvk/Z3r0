@@ -73,6 +73,8 @@ const RUNTIME_FIELD_GROUPS: ConfigFieldGroup<AgentRuntimeConfig>[] = [
       { key: "subordinate_max_turns", label: "Subordinate max turns", min: RUNTIME_CONSTRAINTS.subordinate_max_turns.minimum },
       { key: "model_stream_idle_timeout_seconds", label: "Stream idle timeout", min: RUNTIME_CONSTRAINTS.model_stream_idle_timeout_seconds.minimum },
       { key: "report_retention_seconds", label: "Report retention seconds", min: RUNTIME_CONSTRAINTS.report_retention_seconds.minimum },
+      { key: "traffic_retention_seconds", label: "Traffic retention seconds (0 keeps all)", min: RUNTIME_CONSTRAINTS.traffic_retention_seconds.minimum },
+      { key: "traffic_max_entries_per_container", label: "Traffic entries per sandbox (0 keeps all)", min: RUNTIME_CONSTRAINTS.traffic_max_entries_per_container.minimum },
     ],
   },
   {

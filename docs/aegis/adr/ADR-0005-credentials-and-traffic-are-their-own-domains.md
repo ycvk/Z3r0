@@ -40,7 +40,11 @@ Credential ownership:
   that user is deleted.
 
 Traffic entries reference their container, project, and capturing user by
-plain id and stay after any of them is deleted.
+plain id and stay after any of them is deleted. `service/traffic/retention.py`
+deletes entries past `agent_runtime.traffic_retention_seconds` and, per
+container, those beyond `agent_runtime.traffic_max_entries_per_container`. It
+keeps the newest proxy entry of every existing container, which is where
+synchronization resumes.
 
 ## Consequences
 

@@ -1508,6 +1508,16 @@ export interface components {
              * @default 1000
              */
             subordinate_max_turns: number;
+            /**
+             * Traffic Max Entries Per Container
+             * @default 50000
+             */
+            traffic_max_entries_per_container: number;
+            /**
+             * Traffic Retention Seconds
+             * @default 604800
+             */
+            traffic_retention_seconds: number;
         };
         /** AgentSessionSummarySchema */
         AgentSessionSummarySchema: {
